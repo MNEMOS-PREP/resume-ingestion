@@ -19,13 +19,10 @@ But every module ALSO runs standalone on its own reserved port, for focused
 development and debugging:
 
     cd Backend   && .venv\Scripts\python -m uvicorn backend_M01_Resume_Ingestion.app:app --port 8101
+    cd Frontend  && npm run dev --workspace @ai/m01-resume-ingestion     (:5201)
 
     or simply:   start_resume.bat        this module
                  start_all.bat           every module checked out next door
-
-  M01 has no frontend yet - its screens are specified (spec 8) but not
-  built, and a tab that opens on an empty page is worse than one that is
-  honestly absent. Port 5201 stays reserved.
 
 Both put every service in ONE Windows Terminal window, one tab each, with the
 control tab last. Ports live in scripts\services.txt - which reads them from

@@ -1,0 +1,211 @@
+/*
+  CRITICAL — do not split this import out.
+
+  Tailwind v4 generates utilities from `@theme` only for files inside the entry
+  that imports Tailwind. Importing core's stylesheet and this one SEPARATELY
+  from standalone.tsx looks equivalent and is not: the custom properties get
+  emitted, so the page renders and nothing errors, but the utilities declared
+  below are never generated and the layout collapses in a way that looks like a
+  CSS bug rather than a build one.
+
+  So the chain lives here: core first, this on top.
+*/
+@import "@ai/core/styles.css";
+
+/*
+  M01 — Resume Ingestion & Claim Extraction · design layer.
+
+  Layered ON TOP of @ai/core's tokens, not instead of them. The verification
+  palette is a PLATFORM CONTRACT and is inherited unchanged: a fact whose
+  provenance checks out looks the same in every module, and a concept_id M04
+  resolved is exactly that kind of fact.
+
+  ── The idea ────────────────────────────────────────────────────────────────
+  The student wrote this document. It is theirs, and the screen has to read as
+  a read-back of their own words rather than as a verdict on them. So the
+  extracted skills are the page, set as a scannable set, and everything the
+  module adds — where an id came from, what it could not map — annotates them.
+
+  ── The one rule this stylesheet exists to enforce ──────────────────────────
+  **A skill the ontology could not map is still on the resume.** It gets a
+  visible, hatched, colourless treatment: outside the scale, not at the bottom
+  of it. The failure it prevents is the read-back screen contradicting the
+  student's own document — they see a skill they wrote go missing with no
+  explanation, and conclude the parser is broken.
+
+  There is no mastery bar here. M01 does not measure anything, and a bar on
+  this screen would imply it did.
+*/
+
+@theme {
+  /* ── type ─────────────────────────────────────────────────────────────── */
+  --text-display: 2rem;
+  --text-display--line-height: 1.15;
+  --text-display--letter-spacing: -0.026em;
+
+  --text-title: 1.375rem;
+  --text-title--line-height: 1.25;
+  --text-title--letter-spacing: -0.018em;
+
+  --text-section: 0.9375rem;
+  --text-section--line-height: 1.4;
+  --text-section--letter-spacing: -0.008em;
+
+  /* The pasted JD, when shown back verbatim. Read, not scanned. */
+  --text-source: 0.875rem;
+  --text-source--line-height: 1.7;
+
+  /* ── surface ───────────────────────────────────────────────────────────
+     Cool and quiet. This screen is a worksheet, not a dashboard: nothing on
+     it should compete with the requirement list for attention. */
+  --color-canvas: oklch(0.983 0.003 250);
+  --color-surface: oklch(1 0 0);
+  --color-surface-sunken: oklch(0.969 0.005 250);
+  --color-line: oklch(0.921 0.007 250);
+  --color-line-strong: oklch(0.855 0.011 250);
+
+  --color-ink: oklch(0.205 0.014 250);
+  --color-ink-soft: oklch(0.458 0.014 250);
+  --color-ink-faint: oklch(0.608 0.012 250);
+
+  --color-brand: oklch(0.5 0.14 262);
+  --color-brand-hover: oklch(0.44 0.145 262);
+  --color-brand-soft: oklch(0.967 0.022 262);
+  --color-brand-line: oklch(0.865 0.055 262);
+
+  /* A requirement that maps to no concept. Outside the scale, not at the
+     bottom of it — so it is deliberately colourless. */
+  --color-untestable: oklch(0.955 0.004 250);
+  --color-untestable-line: oklch(0.8 0.008 250);
+
+  --shadow-card: none;
+  --shadow-raised:
+    0 1px 2px oklch(0.205 0.014 250 / 0.06), 0 12px 32px -12px oklch(0.205 0.014 250 / 0.16);
+
+  --radius-panel: 0.5rem;
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  /* Dark mode. Tokens are redefined; nothing else in the app knows. */
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --color-canvas: oklch(0.175 0.011 250);
+    --color-surface: oklch(0.215 0.012 250);
+    --color-surface-sunken: oklch(0.195 0.011 250);
+    --color-line: oklch(0.302 0.012 250);
+    --color-line-strong: oklch(0.402 0.014 250);
+
+    --color-ink: oklch(0.946 0.004 250);
+    --color-ink-soft: oklch(0.748 0.009 250);
+    --color-ink-faint: oklch(0.602 0.011 250);
+
+    --color-brand: oklch(0.75 0.125 262);
+    --color-brand-hover: oklch(0.82 0.115 262);
+    --color-brand-soft: oklch(0.265 0.05 262);
+    --color-brand-line: oklch(0.385 0.072 262);
+
+    --color-untestable: oklch(0.235 0.008 250);
+    --color-untestable-line: oklch(0.38 0.01 250);
+
+    /* The verification palette keeps its MEANING and gains contrast. Colour is
+       never the only signal - every state also carries a word - but a green
+       that reads as grey on a dark surface fails the students who rely on the
+       fast scan. */
+    --color-confirmed: oklch(0.775 0.15 156);
+    --color-confirmed-soft: oklch(0.262 0.05 156);
+    --color-confirmed-line: oklch(0.382 0.08 156);
+
+    --color-reported: oklch(0.792 0.14 76);
+    --color-reported-soft: oklch(0.272 0.05 76);
+    --color-reported-line: oklch(0.402 0.08 76);
+
+    --color-contested: oklch(0.752 0.16 25);
+    --color-contested-soft: oklch(0.272 0.06 25);
+    --color-contested-line: oklch(0.402 0.09 25);
+  }
+
+  body {
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-size: 0.9375rem;
+  }
+
+  /* Severities, scores and counts are all compared against each other. */
+  table,
+  time,
+  [data-numeric] {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /*
+    The provenance mark. Concept ids, sources and timestamps are set in mono at
+    a small size wherever they appear, so "where did this come from" is
+    recognisable by SHAPE before it is read.
+  */
+  .provenance {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: -0.01em;
+    color: var(--color-ink-faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rule-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-ink-faint);
+  }
+
+  .panel {
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-panel);
+  }
+
+  /*
+    A requirement nothing can score.
+
+    Hatched, colourless, and it never renders a bar. Three signals - texture,
+    the absence of a track, and the words "can't be tested here" - because
+    "outside the scale" has to survive a monochrome screen and a screen reader.
+  */
+  .untestable-mark {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      var(--color-untestable) 0 4px,
+      transparent 4px 8px
+    );
+    box-shadow: inset 0 0 0 1px var(--color-untestable-line);
+    border-radius: 3px;
+  }
+
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--color-surface-sunken) 25%,
+      var(--color-line) 37%,
+      var(--color-surface-sunken) 63%
+    );
+    background-size: 400% 100%;
+    animation: skeleton-sweep 1.4s ease-in-out infinite;
+    border-radius: 4px;
+  }
+
+  @keyframes skeleton-sweep {
+    0% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0 50%;
+    }
+  }
+}

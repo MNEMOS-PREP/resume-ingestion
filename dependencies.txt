@@ -81,9 +81,9 @@ you change a response shape, these are who you break.
 
 SHARED PLATFORM CODE  —  a versioned dependency, not a copy
 -------------------------------------------------------------------------------
-    https://github.com/MNEMOS-PREP/Platform_Core   (public)   pinned at v0.5.0
+    https://github.com/MNEMOS-PREP/Platform_Core   (public)   pinned at v0.6.0
 
-    Backend    ai-core @ git+https://github.com/MNEMOS-PREP/Platform_Core@v0.5.0#subdirectory=python
+    Backend    ai-core @ git+https://github.com/MNEMOS-PREP/Platform_Core@v0.6.0#subdirectory=python
 
 Supplies `ai_core.dependencies` - the probing and the `/v1/deps` shape. When
 spans land, `ai_core.evidence.EvidenceSpan` is the platform type for them;
@@ -104,7 +104,11 @@ EXTERNAL DEPENDENCIES
              fastapi · sqlmodel · uvicorn · pytest · httpx · ruff
              Python >= 3.11
 
-  Frontend   none yet. Spec §8 specifies the screens; port 5201 is reserved.
+  Frontend   Frontend/package.json, pinned in Frontend/package-lock.json
+             react 19 · react-router 7 · @tanstack/react-query 5
+             tailwind 4 · vite 6 · typescript 5
+             Node >= 20. Two screens on :5201; the rest of spec §8 is
+             absent rather than stubbed - see README.md.
 
   Database   SQLite by default (zero setup). Set DATABASE_URL for Postgres;
              master plan §20 specifies Postgres + pgvector for real use.

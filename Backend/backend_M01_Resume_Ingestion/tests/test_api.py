@@ -98,3 +98,13 @@ def test_deps_reports_a_live_upstream(client, m04_up):
 
 def test_unknown_resume_is_404(client):
     assert client.get(f"/v1/resumes/{uuid.uuid4()}").status_code == 404
+
+
+def test_status_reports_the_platform_registry(client):
+    """Not this module's opinion of itself - the shared registry's."""
+    res = client.get("/status")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["id"] == "M01"
+    assert body["implemented"] is True
+    assert body["reserved_port"] == 8101

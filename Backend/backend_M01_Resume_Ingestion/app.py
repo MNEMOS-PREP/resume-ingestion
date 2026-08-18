@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
+from ai_core.modules_meta import ModuleStatus, module_status
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import SQLModel, create_engine
@@ -31,6 +32,17 @@ app.add_middleware(
 )
 
 app.include_router(router)
+
+@app.get("/status", response_model=ModuleStatus, tags=["meta"])
+def status() -> ModuleStatus:
+    """What the PLATFORM registry says this module is.
+
+    Deliberately not this module's own opinion of itself: the registry in
+    Platform_Core is what the shell and the gateway read, and the two
+    disagreeing is worth being able to see in one request.
+    """
+    return module_status("M01")
+
 
 @app.get("/health", tags=["meta"])
 def health() -> dict[str, str]:

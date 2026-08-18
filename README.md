@@ -4,14 +4,15 @@
 > test.** Every later module that asks "defend this bullet" is asking about
 > something this module extracted.
 >
-> Spec: [plan_in_depth/M01_Resume_Ingestion.md](plan_in_depth/M01_Resume_Ingestion.md) · Ports: API `8101` ([PORTS.txt](PORTS.txt))
+> Spec: [plan_in_depth/M01_Resume_Ingestion.md](plan_in_depth/M01_Resume_Ingestion.md) · Ports: API `8101`, web `5201` ([PORTS.txt](PORTS.txt))
 
 ```bash
 git clone https://github.com/MNEMOS-PREP/resume-ingestion
 cd resume-ingestion
 python -m venv Backend/.venv && Backend/.venv/Scripts/python -m pip install -e ".[dev]"
-Backend/.venv/Scripts/python -m pytest       # 8 passed, no network, no API key
-start_resume.bat                              # API on :8101
+Backend/.venv/Scripts/python -m pytest       # 9 passed, no network, no API key
+cd Frontend && npm install && cd ..
+start_resume.bat                              # API :8101 · web :5201
 ```
 
 No API key needed, and **no model is called anywhere in this milestone.** The
@@ -86,6 +87,42 @@ writes against it.
 
 ---
 
+## The frontend
+
+Two screens on `:5201`, and the reason they are only two is that the backend
+fills only two. `src/api.ts` has one hook per endpoint and none without one —
+so there is no `useClaims`, no `useRedFlags`, no `useConfirm`, because writing
+them would let a screen be built on an endpoint that does not answer.
+
+**There is no mastery bar on these screens, on purpose.** M01 reads claims; it
+does not test them. A bar here — even an empty one — would imply a measurement
+this module has no business making, and `@ai/core` owns that component precisely
+so it appears only where a measurement exists.
+
+What the screens do carry is the honesty the backend now enforces:
+
+- **Every mapped skill says who mapped it.** `ontology` (green) means M04
+  resolved the id; `guessed offline` (amber) means the five-entry table did and
+  nothing has confirmed it exists. An id is a licence for M05 to build questions
+  on and M13 to score against, so handing one over unlabelled is how a concept
+  nobody reviewed reaches a real interview.
+- **Unmapped skills get their own group**, hatched and colourless — outside the
+  scale rather than at the bottom of it. Silently dropping them makes the
+  read-back contradict the student's own document, and the fix they reach for is
+  editing their resume to please the parser.
+- **The scan source is stated above the list.** A three-skill result from the
+  offline lexicon and a three-skill result from the full ontology look identical
+  and mean completely different things.
+
+What is absent rather than stubbed: no upload control (PDF/DOCX aren't parsed,
+and a disabled button reads as a broken product), no SSE progress feed (§2.3's
+stage-by-stage screen would be theatre over a 30 ms regex), and no editing
+(FR-1.11/1.12 need a PATCH endpoint and a section model — an input that
+discards what you type is worse than no input). The claims section names what
+the module is called after and does not do, including the FR-1.17 PII gap.
+
+---
+
 ## Layout
 
 ```
@@ -98,10 +135,16 @@ Backend/
     app.py                      FastAPI app, SQLite engine, /health
     router.py                   every endpoint, and the M04 client
     models.py                   Resume — the whole data model today
-    tests/                      8 tests, no socket opened
+    tests/                      9 tests, no socket opened
   seed.py                       two resumes, provenance-marked as seeded
+Frontend/
+  frontend_M01_Resume_Ingestion/
+    src/api.ts                  one hook per endpoint, and none without one
+    src/types.ts                only fields the API actually sends
+    src/components/             IngestPage, ResumePage, SkillSet, DepsPage
+    src/ui/                     shell, primitives, design tokens
 scripts/                        launcher engine (shared, identical across repos)
-start_resume.bat                this module            (:8101)
+start_resume.bat                this module            (:8101 · :5201)
 start_all.bat                   plus any sibling repo checked out next door
 ```
 
