@@ -1,0 +1,10 @@
+fastapi>=0.115
+sqlmodel>=0.0.22
+uvicorn[standard]>=0.30
+pyyaml>=6.0
+ai-core @ git+https://github.com/MNEMOS-PREP/Platform_Core@v0.3.0#subdirectory=python
+
+[dev]
+pytest>=8
+httpx>=0.27
+ruff>=0.6

@@ -1,0 +1,18 @@
+{
+  "module": "M01",
+  "name": "Resume Ingestion & Claim Extract",
+  "spec": "plan_in_depth/M01_Resume_Ingestion.md",
+  "repo": "https://github.com/MNEMOS-PREP/Resume_Ingestion",
+  "owner": "E3",
+  "phase": "1",
+  "ports": {
+    "backend": 8101,
+    "frontend": 5201
+  },
+  "core": {
+    "repo": "https://github.com/MNEMOS-PREP/Platform_Core",
+    "version": "v0.3.0"
+  },
+  "depends_on": [{"module": "M04"}],
+  "feeds": []
+}
