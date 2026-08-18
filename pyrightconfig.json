@@ -1,7 +1,7 @@
 {
-  "venvPath": "../Backend",
+  "venvPath": "Backend",
   "venv": ".venv",
-  "pythonVersion": "3.12",
+  "pythonVersion": "3.11",
   "pythonPlatform": "Windows",
   "extraPaths": ["Backend"]
 }

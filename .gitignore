@@ -27,6 +27,9 @@ htmlcov/
 # SQLite dev databases
 *.db
 
+# Launcher PID and command files
+.run/
+
 # IDE
 .vscode/
 .idea/

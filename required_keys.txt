@@ -1,0 +1,22 @@
+===============================================================================
+  M01 - RESUME INGESTION & CLAIM EXTRACTION   ·   REQUIRED KEYS
+===============================================================================
+
+  None. This module needs no API key to run, and holds none.
+
+Everything it does today is deterministic: a lexicon scan over the text, a
+resolve call to M04, and arithmetic. There is no model in the path, so there
+is nothing to configure and nothing to leak.
+
+That changes at the first LLM stage in the spec (§6.2 extraction). When it
+does, copy the shape from a module that already has keys - M15's
+required_keys.txt - rather than inventing a second convention: one provider
+list, tried in order, and the module still runs with none of them set.
+
+The one environment variable this module reads:
+
+  M04_BASE_URL      point at a running M04 without editing module.json
+                    default: http://127.0.0.1:8104
+
+  BACKEND_PORT      override the reserved port from PORTS.txt
+                    default: 8101

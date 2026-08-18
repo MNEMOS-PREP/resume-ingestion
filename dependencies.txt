@@ -1,0 +1,142 @@
+===============================================================================
+  M01 — RESUME INGESTION & CLAIM EXTRACTION · WHAT THIS MODULE NEEDS
+  Repo: https://github.com/MNEMOS-PREP/resume-ingestion
+  Spec: plan_in_depth/M01_Resume_Ingestion.md
+  The machine-readable version is module.json. This is the one for humans.
+  Last updated: 2026-08-18
+===============================================================================
+
+THE SHORT VERSION
+-------------------------------------------------------------------------------
+Clone it, install it, run it. Nothing below is required to start, and nothing
+is marked required: true - deliberately. Marking an upstream required turns
+someone else's outage into yours.
+
+A missing upstream narrows the SCOPE of what M01 can say. It never lowers the
+quality of what it does say, and it is never silent: GET /v1/deps names each
+one and what it costs.
+
+
+UPSTREAM
+-------------------------------------------------------------------------------
+  M04  Skill Graph & MNEMOS Memory          http://127.0.0.1:8104
+       Repo: https://github.com/MNEMOS-PREP/Memory
+       Health: GET :8104/health
+
+       Needs it for:  two things, and they fail separately.
+                      1. GET /v1/concepts       - the ontology a resume is
+                                                  scanned against. Decides
+                                                  which skills we find at all.
+                      2. POST /v1/concepts/resolve - label -> concept_id, which
+                                                  is what makes a claimed skill
+                                                  testable by M05 and M13.
+
+       Without it:    the scan falls back to a five-concept offline lexicon and
+                      the resolutions to a five-entry table. Both are usable
+                      and both are LABELLED: every response carries
+                      `scanned_against` and a per-label `concept_source` of
+                      "m04" or "offline_fallback". Nothing that came from the
+                      offline table is ever presented as ontology.
+
+
+THE RULE THIS MODULE KEEPS BREAKING, AND WHY IT MATTERS
+-------------------------------------------------------------------------------
+Rule 2: a missing input narrows the SCOPE of what we show, never the quality,
+and never silently. Two ways this module can violate it, both fixed and both
+guarded by a test:
+
+  A guess that looks like a fact.   A concept_id is a licence for M05 to build
+  questions on and for M13 to score against. An id this module guessed from a
+  five-entry offline table must not arrive downstream indistinguishable from
+  one the ontology confirmed - that is how a fabricated concept ends up in a
+  real interview. Now: `concept_source` per label.
+  (test_offline_ids_are_labelled_as_guesses)
+
+  A skill that quietly vanishes.   Skills M04 could not resolve used to be
+  dropped from the response entirely. The student then sees the read-back
+  screen contradict their own resume, with no explanation, which reads as
+  "the parser is broken". Now: `unresolved_skills` keeps them, stated as
+  unmapped rather than absent. (test_unmappable_skill_is_kept_not_dropped)
+
+
+WHAT THIS MODULE FEEDS (downstream)
+-------------------------------------------------------------------------------
+These consume M01. They are NOT dependencies - M01 never calls them - but if
+you change a response shape, these are who you break.
+
+  MODULE  WHAT THEY TAKE FROM US
+  ------  ----------------------------------------------------------------
+  M02     resume claims, to weight a JD requirement by what the student has
+          actually done rather than only by what the JD emphasises
+  M05     claim-grounded probes - the resume-specific question source
+  M06     the claims to defend in the interview
+  M13     the claim under test, to score the defence against
+  M19     claim provenance, for the evidence ledger
+
+  NOTE: what they read is `ResumeClaim` with a `SourceSpan` (spec §5). This
+  code publishes a flat skill list and no spans, so none of the five can
+  consume it yet. Spans are the highest-value next thing to build here -
+  everything downstream is built on citing one.
+
+
+SHARED PLATFORM CODE  —  a versioned dependency, not a copy
+-------------------------------------------------------------------------------
+    https://github.com/MNEMOS-PREP/Platform_Core   (public)   pinned at v0.4.0
+
+    Backend    ai-core @ git+https://github.com/MNEMOS-PREP/Platform_Core@v0.4.0#subdirectory=python
+
+Supplies `ai_core.dependencies` - the probing and the `/v1/deps` shape. When
+spans land, `ai_core.evidence.EvidenceSpan` is the platform type for them;
+do not declare a second one here.
+
+**Pinned by tag on purpose.** Tracking `main` is how you get a surprise
+breakage on a Tuesday. Upgrading is deliberate: bump the tag, run the tests,
+commit the bump. Versions across the nineteen repos diverging is fine; they
+diverge on YOUR schedule.
+
+Platform_Core is public, so no SSH key or token is needed to install it. The
+module repos stay private.
+
+
+EXTERNAL DEPENDENCIES
+-------------------------------------------------------------------------------
+  Backend    pyproject.toml
+             fastapi · sqlmodel · uvicorn · pytest · httpx · ruff
+             Python >= 3.11
+
+  Frontend   none yet. Spec §8 specifies the screens; port 5201 is reserved.
+
+  Database   SQLite by default (zero setup). Set DATABASE_URL for Postgres;
+             master plan §20 specifies Postgres + pgvector for real use.
+
+  Keys       none. Nothing here calls a model yet - see required_keys.txt.
+             Note that the spec's pipeline (§6) is LLM-heavy; the first
+             extraction stage is where keys arrive.
+
+
+RUNNING WITHOUT ANY OTHER MODULE
+-------------------------------------------------------------------------------
+    python -m venv Backend\.venv
+    Backend\.venv\Scripts\python -m pip install -e ".[dev]"
+    start_resume.bat               API :8101
+    cd Backend && .venv\Scripts\python seed.py
+
+Everything works. GET /v1/deps reports M04 unavailable and says what that
+costs, which is the point: the API tells you what is missing rather than
+pretending.
+
+    start_all.bat                  the same, plus every sibling module repo
+
+`start_all.bat` reads the `depends_on` list in module.json, looks for each
+repo checked out beside this one (`..\Memory`), and launches the ones it finds
+into the SAME terminal window - so one control tab closes all of them.
+
+**The sibling folder name is derived from the LAST PATH SEGMENT of the repo
+URL in module.json.** The on-disk folder and the GitHub repo name have to
+agree or a module that is checked out and running is skipped in silence. This
+has now cost the platform three separate afternoons; check it when you add a
+dependency.
+
+A sibling that is not on disk is skipped silently, because that is the normal
+case and not an error. Running `start_resume.bat` and then `start_all.bat` is
+the fastest way to see degradation switch on and off.

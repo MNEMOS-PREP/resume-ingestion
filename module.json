@@ -1,8 +1,8 @@
 {
   "module": "M01",
-  "name": "Resume Ingestion & Claim Extract",
+  "name": "Resume Ingestion & Claim Extraction",
   "spec": "plan_in_depth/M01_Resume_Ingestion.md",
-  "repo": "https://github.com/MNEMOS-PREP/Resume_Ingestion",
+  "repo": "https://github.com/MNEMOS-PREP/resume-ingestion",
   "owner": "E3",
   "phase": "1",
   "ports": {
@@ -11,8 +11,40 @@
   },
   "core": {
     "repo": "https://github.com/MNEMOS-PREP/Platform_Core",
-    "version": "v0.3.0"
+    "version": "v0.4.0"
   },
-  "depends_on": [{"module": "M04"}],
-  "feeds": []
+
+  "_comment_depends_on": [
+    "Nothing here is required to START. Every upstream is optional at runtime,",
+    "and its absence removes a FEATURE, never the endpoint and never silently.",
+    "`on_missing` is shown to a student: write a sentence they can act on.",
+    "A missing `base_url` is not a safe default - it silently disables the",
+    "upstream even when it IS running, so every entry carries one.",
+    "Override any base_url without editing this file: M04_BASE_URL=http://..."
+  ],
+  "depends_on": [
+    {
+      "module": "M04",
+      "name": "Skill Graph & MNEMOS Memory",
+      "repo": "https://github.com/MNEMOS-PREP/Memory",
+      "reason": "the concept ontology to scan a resume against, and label -> concept_id resolution for every skill we find",
+      "on_missing": "Skill mapping — needs M04 Skill Graph. We still read the skills off your resume; they just aren't tied to the ontology yet, so nothing downstream can test them.",
+      "base_url": "http://127.0.0.1:8104",
+      "health_path": "/health",
+      "required": false
+    }
+  ],
+
+  "_comment_feeds": [
+    "These consume M01. They are NOT dependencies - M01 never calls them - but",
+    "the claim and skill shapes are what they read.",
+    "Additive changes are safe; renaming or removing a field breaks them."
+  ],
+  "feeds": [
+    { "module": "M02", "takes": "resume claims, to weight a JD requirement by what the student has actually done" },
+    { "module": "M05", "takes": "claim-grounded probes, the resume-specific question source" },
+    { "module": "M06", "takes": "claims to defend in the interview" },
+    { "module": "M13", "takes": "the claim under test, to score the defence against" },
+    { "module": "M19", "takes": "claim provenance for the evidence ledger" }
+  ]
 }
