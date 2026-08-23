@@ -1,0 +1,106 @@
+{
+  "set": "edge-cases",
+  "note": "The §9 edge cases that are a segmentation or skill-mapping question rather than an intake one. Intake edge cases (encrypted PDF, .doc, zero bytes) live in test_documents.py, because they never reach this stage.",
+  "resumes": [
+    {
+      "id": "edge-01-fresher-coursework",
+      "note": "EC-1.14. A first-year with no projects and no internship. Everything is coursework, and the correct answer is a thin resume read correctly — not an empty one.",
+      "preamble": "contact",
+      "sections": [
+        ["EDUCATION", "education"],
+        ["COURSEWORK", "education"],
+        ["SKILLS", "skills"]
+      ],
+      "skills": [
+        "C",
+        "Python",
+        "Data Structures",
+        "Discrete Mathematics",
+        "Digital Logic"
+      ],
+      "text": [
+        "ADITI VERMA",
+        "aditi.verma@example.com",
+        "",
+        "EDUCATION",
+        "Manipal Institute of Technology, B.Tech CSE, 2024 - 2028, CGPA 8.8",
+        "",
+        "COURSEWORK",
+        "Data Structures, Discrete Mathematics, Digital Logic",
+        "",
+        "SKILLS",
+        "C, Python"
+      ]
+    },
+    {
+      "id": "edge-02-research-cv",
+      "note": "EC-1.5. A research student's CV: a Publications section, and a Research Experience section that is experience rather than publications.",
+      "preamble": "contact",
+      "sections": [
+        ["EDUCATION", "education"],
+        ["RESEARCH EXPERIENCE", "experience"],
+        ["PUBLICATIONS", "publications"],
+        ["TECHNICAL SKILLS", "skills"]
+      ],
+      "skills": ["Python", "JAX", "NumPy", "LaTeX"],
+      "text": [
+        "SHREYA GHOSH",
+        "shreya.ghosh@example.com | orcid.org/0000-0002-1825-0097",
+        "",
+        "EDUCATION",
+        "M.Tech Computational Biology, IIIT Delhi, 2023 - 2025, CGPA 9.2",
+        "",
+        "RESEARCH EXPERIENCE",
+        "- Research Assistant, Structural Bioinformatics Lab, Jan 2024 - Present.",
+        "- Reimplemented a folding baseline in JAX, cutting a 40-hour run to 6 hours.",
+        "",
+        "PUBLICATIONS",
+        "- Ghosh, S. and Rao, K. Fast contact-map refinement. BIBM 2024.",
+        "",
+        "TECHNICAL SKILLS",
+        "Python, JAX, NumPy, LaTeX"
+      ]
+    },
+    {
+      "id": "edge-03-ambiguous-tokens",
+      "note": "The §12 ambiguity suite as a document. R, C and Go are languages here and must survive as written; none of them may be resolved to React, C++ or anything else.",
+      "preamble": "contact",
+      "sections": [
+        ["EDUCATION", "education"],
+        ["SKILLS", "skills"]
+      ],
+      "skills": ["R", "C", "Go", "Rust", "Swift", "Spring", "Express", "Next"],
+      "text": [
+        "TANVI DESAI",
+        "tanvi.desai@example.com",
+        "",
+        "EDUCATION",
+        "B.Sc Statistics, Fergusson College, 2021 - 2024, CGPA 8.1",
+        "",
+        "SKILLS",
+        "R, C, Go, Rust, Swift, Spring, Express, Next"
+      ]
+    },
+    {
+      "id": "edge-04-repeated-skill",
+      "note": "EC-1.12. The same skill written many times across a document. It is one claim per context, not fourteen claims.",
+      "preamble": "contact",
+      "sections": [
+        ["PROJECTS", "projects"],
+        ["SKILLS", "skills"]
+      ],
+      "skills": ["Docker", "Python"],
+      "text": [
+        "IMRAN QURESHI",
+        "imran.q@example.com",
+        "",
+        "PROJECTS",
+        "- Containerised six services with Docker, cutting deploy time from 25 minutes to 4.",
+        "- Wrote the Python tooling that generates the Docker files from a template.",
+        "",
+        "SKILLS",
+        "Docker, Docker, Python, Docker"
+      ]
+    }
+  ]
+}

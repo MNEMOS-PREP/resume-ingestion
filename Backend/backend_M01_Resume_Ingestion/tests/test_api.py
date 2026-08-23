@@ -108,3 +108,91 @@ def test_status_reports_the_platform_registry(client):
     assert body["id"] == "M01"
     assert body["implemented"] is True
     assert body["reserved_port"] == 8101
+
+
+# ---------------------------------------------------------------------------
+#  Extraction: what the document says, before the ontology has an opinion
+#
+#  `test_unmappable_skill_is_kept_not_dropped` above asserts the right thing
+#  and used to pass for the wrong reason. It injects a concept INTO M04 and
+#  then makes M04 fail to resolve it — an internal inconsistency, and the only
+#  path by which the old extraction could ever populate `unresolved_skills`,
+#  because labels reached the resolver only by having come from the resolver.
+#  A student's own skill could not get there. These cover the real path.
+# ---------------------------------------------------------------------------
+
+
+def _ingest(client, text):
+    return client.post(
+        "/v1/resumes/ingest",
+        json={"candidate_id": str(uuid.uuid4()), "raw_text": text},
+    ).json()
+
+
+def test_technologies_outside_the_ontology_are_kept_not_invisible(client, m04_up):
+    """The regression that mattered most.
+
+    The ontology holds interview concepts, not technologies, so almost nothing
+    on a real SKILLS line resolves to anything. That is fine and expected — but
+    it must show up as "we could not map these", never as silence.
+    """
+    m04_up()
+    data = _ingest(client, "SKILLS\nPython, Java, Docker, Kubernetes, TensorFlow")
+
+    assert data["parsed_skills"] == ["Python", "Java", "Docker", "Kubernetes", "TensorFlow"]
+    assert data["unresolved_skills"] == ["Python", "Java", "Docker", "Kubernetes", "TensorFlow"]
+    assert data["resolved_concepts"] == {}
+
+
+def test_a_real_skills_line_is_not_an_empty_resume(client, m04_up):
+    """These two responses used to be identical. That was the whole bug."""
+    m04_up()
+    written = _ingest(client, "SKILLS\nPython, Docker, Kubernetes, AWS, React")
+    blank = _ingest(client, "")
+
+    assert blank["parsed_skills"] == []
+    assert written["parsed_skills"] != blank["parsed_skills"]
+
+
+def test_everyday_words_do_not_become_claims(client, m04_up):
+    """ "a solid communicator" is not a claim about SOLID principles.
+
+    Twenty-five of the ontology's aliases are ordinary English words. Matched
+    in running prose they invent requirements out of adjectives, and downstream
+    an invented requirement becomes an interview question.
+    """
+    m04_up(
+        extra_concepts=[
+            {"name": "SOLID Principles", "aliases": ["solid"]},
+            {"name": "Stacks", "aliases": ["stack"]},
+            {"name": "Classes and Objects", "aliases": ["class"]},
+        ]
+    )
+    data = _ingest(
+        client,
+        "A solid communicator. Full stack developer, class of 2026.",
+    )
+
+    assert data["parsed_skills"] == []
+
+
+def test_a_listed_ambiguous_word_is_still_a_claim(client, m04_up):
+    """The same word, enumerated rather than used as an adjective, counts.
+
+    This is the other half of the rule: "stack" in prose is an adjective,
+    "stack" as an item under SKILLS is a claim. Blocking it everywhere would
+    trade one silent failure for another.
+    """
+    m04_up(extra_concepts=[{"name": "Stacks", "aliases": ["stack"]}])
+    data = _ingest(client, "SKILLS\nstack, queues")
+
+    assert "stack" in data["parsed_skills"]
+
+
+def test_multi_word_concepts_still_match_in_running_prose(client, m04_up):
+    """A project bullet is evidence too, and phrases are unambiguous."""
+    m04_up()
+    data = _ingest(client, "Built a route planner using dynamic programming on a 12k-node graph.")
+
+    assert "Dynamic Programming" in data["parsed_skills"]
+    assert data["resolved_concepts"]["Dynamic Programming"] == "concept:dynamic_programming"

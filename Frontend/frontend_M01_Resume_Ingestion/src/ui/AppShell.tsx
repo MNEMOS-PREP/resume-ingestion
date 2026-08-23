@@ -116,6 +116,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas">
+      {/* §8.4. Without it a keyboard user tabs the whole nav on every screen
+          before reaching the thing they came for. */}
+      <a href="#main" className="skip-link">
+        Skip to content
+      </a>
       <header className="sticky top-0 z-30 border-b border-line bg-canvas/90 backdrop-blur">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-5 py-2.5">
           <Link to="/" className="flex shrink-0 items-center gap-2.5">
@@ -164,7 +169,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-8 md:px-8 md:py-10">
+      <main id="main" className="mx-auto w-full max-w-5xl flex-1 px-5 py-8 md:px-8 md:py-10">
         <div className="mb-8 empty:mb-0">
           <DependencyAlert degraded={degraded} />
         </div>

@@ -12,6 +12,23 @@ dependencies = [
     "sqlmodel>=0.0.22",
     "uvicorn[standard]>=0.30",
     "ai-core @ git+https://github.com/MNEMOS-PREP/Platform_Core@v0.6.0#subdirectory=python",
+    # FR-1.1 / FR-1.3 / FR-1.4. Not optional: the spec requires PDF and DOCX,
+    # and a deployment without them can only accept pasted text - which works,
+    # and which `GET /v1/capabilities` would then have to report as the only
+    # thing on offer. Declared so that is never the accidental state.
+    "pymupdf>=1.24",          # text layer with per-word bounding boxes
+    "python-docx>=1.1",       # .docx paragraphs and tables
+    "python-multipart>=0.0.9",# multipart upload for POST /v1/resumes
+    # FR-1.7 / spec 6.4 step 3. Without it the skill resolver silently loses
+    # its fuzzy step: "Kubernets" and "Javascrpt" stop resolving and land in
+    # the unmapped queue instead. `normalise.py` reports the absence rather
+    # than compensating for it, but recall is measurably worse, so it is a
+    # hard dependency rather than an extra.
+    "rapidfuzz>=3.9",         # FR-1.7 / 6.4 step 3 — fuzzy alias matching
+    "pyyaml>=6",              # the alias table
+    "pdfplumber>=0.11",       # 6.2.4 — ruled tables as `key: value` lines
+    "langdetect>=1.0.9",      # EC-1.6 — flag a resume we cannot read properly
+    "cryptography>=42",       # FR-1.17 — the encrypted contact column
 ]
 
 [project.optional-dependencies]
@@ -19,6 +36,20 @@ dev = [
     "pytest>=8",
     "httpx>=0.27",
     "ruff>=0.6",
+]
+
+# FR-1.16, and deliberately opt-in. §6.2.6 specifies PaddleOCR: several hundred
+# megabytes that every CI run would pay for, to serve the minority of resumes
+# that are scans. Without it a scanned PDF is a NAMED error pointing at the
+# paste path (`documents.ocr_pdf`), never a silent empty parse - which is the
+# half of EC-1.2 that actually matters. `pytesseract` is honoured too, because
+# a machine that already has Tesseract should not need Paddle - though it needs
+# the Tesseract BINARY, which pip cannot install.
+ocr = [
+    "paddleocr>=2.7",
+    "paddlepaddle>=2.6",      # the ENGINE. `paddleocr` alone installs and does not run.
+    "pillow>=10",
+    "numpy>=1.26",
 ]
 
 [tool.setuptools.packages.find]
@@ -29,6 +60,12 @@ namespaces = false
 [tool.pytest.ini_options]
 pythonpath = ["Backend"]
 testpaths = ["Backend/backend_M01_Resume_Ingestion"]
+# Release-blocking criteria are tests, not a document. `pytest -m gate` is the
+# release check, and it collected nothing in this repo until the claim pipeline
+# landed - which is why "no gates in M01 or M02" was on the debt list.
+markers = [
+    "gate: release-blocking acceptance gate (spec §13)",
+]
 
 [tool.ruff]
 line-length = 100

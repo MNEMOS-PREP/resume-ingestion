@@ -14,6 +14,7 @@ import urllib.error
 import urllib.request
 
 import pytest
+from ai_core.concepts import normalise_alias
 from backend_M01_Resume_Ingestion import router as router_module
 from backend_M01_Resume_Ingestion.app import app
 from backend_M01_Resume_Ingestion.router import get_db
@@ -83,7 +84,13 @@ class _FakeM04:
             body = {"concepts": self.concepts}
         elif url.endswith("/v1/concepts/resolve"):
             labels = json.loads(req.data.decode("utf-8"))["labels"]
-            body = {"resolved": {label: self.resolved.get(label) for label in labels}}
+            # Case- and whitespace-insensitive, because the real resolver is:
+            # `normalise_alias` exists in ai_core for exactly this. An
+            # exact-string fake makes "recursion" off a SKILLS line look
+            # unresolvable while "Recursion" off the ontology resolves, which
+            # is a property of the fixture and of nothing else.
+            table = {normalise_alias(key): value for key, value in self.resolved.items()}
+            body = {"resolved": {label: table.get(normalise_alias(label)) for label in labels}}
         else:  # pragma: no cover - a call we did not expect is a test bug
             raise AssertionError(f"unexpected M04 call: {url}")
         return _Response(body)
@@ -122,6 +129,19 @@ def m04_up_fixture(m04):
         return m04
 
     return _bring_up
+
+
+@pytest.fixture(autouse=True)
+def _blobs_in_tmp(tmp_path, monkeypatch):
+    """Content-addressed storage, pointed somewhere disposable.
+
+    Autouse rather than opt-in: a test that writes an artifact into the working
+    tree is one nobody notices until the repository has a `blobs/` directory
+    full of other people's resumes.
+    """
+    from backend_M01_Resume_Ingestion import storage
+
+    monkeypatch.setattr(storage, "BLOB_ROOT", tmp_path / "blobs")
 
 
 @pytest.fixture(name="client")

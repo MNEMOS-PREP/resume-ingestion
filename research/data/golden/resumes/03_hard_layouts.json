@@ -1,0 +1,103 @@
+{
+  "set": "hard-layouts",
+  "note": "The documents that break parsers. A two-column PDF arrives here as the text layer AFTER reading order has been resolved, so this set measures segmentation on that output rather than re-testing the column detection — that has its own tests in test_documents.py.",
+  "resumes": [
+    {
+      "id": "hard-01-two-column-output",
+      "note": "What a correctly-read two-column resume looks like once the columns have been linearised: the right column arrives as one block after the left, so a SKILLS heading appears late and out of visual order.",
+      "preamble": "contact",
+      "sections": [
+        ["EDUCATION", "education"],
+        ["PROJECTS", "projects"],
+        ["SKILLS", "skills"],
+        ["INTERESTS", "extras"]
+      ],
+      "skills": ["Python", "Go", "Kubernetes", "Terraform", "Prometheus"],
+      "text": [
+        "DEEPAK SHARMA",
+        "deepak.sharma@example.com | +91 98110 33445 | github.com/dsharma",
+        "",
+        "EDUCATION",
+        "Delhi Technological University",
+        "B.Tech Software Engineering",
+        "2021 - 2025, CGPA 8.0",
+        "",
+        "PROJECTS",
+        "- Built a container scheduler in Go that packs 1.3x more pods per node than the default.",
+        "- Wrote Terraform modules that cut environment setup from 2 days to 20 minutes.",
+        "",
+        "SKILLS",
+        "Python",
+        "Go",
+        "Kubernetes",
+        "Terraform",
+        "Prometheus",
+        "",
+        "INTERESTS",
+        "Distributed systems, long-distance running"
+      ]
+    },
+    {
+      "id": "hard-02-paragraph-style",
+      "note": "EC-1.10. No bullet glyphs anywhere; claims have to come out of sentences. Segmentation still has headings to work with, which is what separates this from hard-03.",
+      "preamble": "contact",
+      "sections": [
+        ["Education", "education"],
+        ["Experience", "experience"],
+        ["Skills", "skills"]
+      ],
+      "skills": ["Django", "Redis", "Celery"],
+      "text": [
+        "MEERA NAIR",
+        "meera.nair@example.com",
+        "",
+        "Education",
+        "I completed my B.Tech in Computer Science at Cochin University in 2025 with a CGPA of 8.3.",
+        "",
+        "Experience",
+        "I worked as a backend intern for six months. I rebuilt the reporting pipeline in Django and moved the heavy jobs onto Celery with Redis as the broker. The nightly run went from four hours to fifty minutes. I also wrote the runbook the on-call team still uses.",
+        "",
+        "Skills",
+        "Django, Redis, Celery"
+      ]
+    },
+    {
+      "id": "hard-03-no-headings",
+      "note": "A resume with no recognisable headings at all. The correct answer is one low-confidence 'unknown' section covering everything — a guessed section kind at high confidence would be worse.",
+      "preamble": "unknown",
+      "sections": [],
+      "skills": [],
+      "text": [
+        "Arjun Reddy, final year student at IIIT Hyderabad.",
+        "Worked on a recommendation engine during a summer internship at Zomato.",
+        "Comfortable with backend work and interested in ranking problems.",
+        "Reachable on arjun.reddy@example.com."
+      ]
+    },
+    {
+      "id": "hard-04-colon-headings",
+      "note": "Headings written as 'Education:' with the content on the same line — the shape a Google Docs one-pager produces. The colon form is what the heading matcher has to tolerate.",
+      "preamble": "contact",
+      "sections": [
+        ["Education:", "education"],
+        ["Projects:", "projects"],
+        ["Technical Skills:", "skills"]
+      ],
+      "skills": ["Rust", "WebAssembly", "TypeScript"],
+      "text": [
+        "NIKHIL BOSE",
+        "nikhil.bose@example.com",
+        "",
+        "Education:",
+        "B.Tech CSE, IIT Guwahati, 2022 - 2026, CGPA 8.7",
+        "",
+        "Projects:",
+        "- Wrote a Rust image codec compiled to WebAssembly, decoding a 4MP frame in 18ms.",
+        "- Built a TypeScript client for it used by 3 internal tools.",
+        "",
+        "Technical Skills:",
+        "Rust, WebAssembly, TypeScript"
+      ]
+    }
+  ]
+}

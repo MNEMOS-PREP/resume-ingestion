@@ -1,0 +1,106 @@
+{
+  "set": "traps",
+  "note": "Documents written to make the parser wrong. Everything above tests that the right answer is found; this set tests that a plausible wrong answer is not. A corpus of only well-formed documents scores 1.000 and measures nothing, which is the trap a self-authored golden set falls into — so these were written to fail, and the ones that stopped failing are the fixes worth having.",
+  "resumes": [
+    {
+      "id": "trap-01-heading-words-in-prose",
+      "note": "Section words used as ordinary English inside bullets. 'I have experience with Docker' is not an EXPERIENCE heading, and 'good communication skills' is not a SKILLS heading — both are full sentences, and the heading matcher must require a line that is mostly just the heading.",
+      "preamble": "contact",
+      "sections": [
+        [
+          "PROJECTS",
+          "projects"
+        ],
+        [
+          "SKILLS",
+          "skills"
+        ]
+      ],
+      "skills": [
+        "Docker",
+        "Kubernetes"
+      ],
+      "text": [
+        "ROHAN GUPTA",
+        "rohan.gupta@example.com",
+        "",
+        "PROJECTS",
+        "- I have experience with Docker and used it to containerise four services.",
+        "- Built a deployment tool; the interests of the ops team drove the design.",
+        "- My activities included on-call rotation and writing the runbook.",
+        "",
+        "SKILLS",
+        "Docker, Kubernetes"
+      ]
+    },
+    {
+      "id": "trap-02-slashes-and-dots",
+      "note": "Names that contain a slash or a dot and must not be split. CI/CD is one thing, not two; Node.js is one thing, not a sentence boundary; .NET keeps its leading dot.",
+      "preamble": "contact",
+      "sections": [
+        [
+          "TECHNICAL SKILLS",
+          "skills"
+        ]
+      ],
+      "skills": [
+        "CI/CD",
+        "TCP/IP",
+        "Node.js",
+        ".NET",
+        "C++",
+        "Objective-C"
+      ],
+      "text": [
+        "FATIMA SHAIKH",
+        "fatima.shaikh@example.com",
+        "",
+        "TECHNICAL SKILLS",
+        "CI/CD, TCP/IP, Node.js, .NET, C++, Objective-C"
+      ]
+    },
+    {
+      "id": "trap-03-inline-heading",
+      "note": "The heading and its list on one line - 'Skills: Python, SQL'. Common in one-page resumes. The heading is doing two jobs, so it is recognised only on an exact lexicon hit: a partial match would make 'Languages Known: Tamil, English' a skills section, and every 'Label: value' line a section boundary.",
+      "preamble": "contact",
+      "sections": [
+        [
+          "Skills: Python, SQL, Pandas",
+          "skills"
+        ]
+      ],
+      "skills": [
+        "Python",
+        "SQL",
+        "Pandas"
+      ],
+      "text": [
+        "VIKRAM SINGH",
+        "vikram.singh@example.com",
+        "Skills: Python, SQL, Pandas"
+      ]
+    },
+    {
+      "id": "trap-04-eligibility-not-skills",
+      "note": "A skills line polluted with eligibility text. '7.5 CGPA' and '2+ years' are requirements, not skills, and filing them under skills puts a number the ontology can never resolve into the unmapped queue for ever.",
+      "preamble": "contact",
+      "sections": [
+        [
+          "KEY SKILLS",
+          "skills"
+        ]
+      ],
+      "skills": [
+        "Python",
+        "Django"
+      ],
+      "text": [
+        "NEHA AGARWAL",
+        "neha.agarwal@example.com",
+        "",
+        "KEY SKILLS",
+        "Python, Django, 7.5 CGPA, 2+ years experience, B.Tech degree"
+      ]
+    }
+  ]
+}

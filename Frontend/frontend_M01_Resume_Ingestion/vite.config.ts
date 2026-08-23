@@ -26,6 +26,11 @@ export default defineConfig({
     proxy: {
       "/v1": { target: API_TARGET, changeOrigin: true },
       "/health": { target: API_TARGET, changeOrigin: true },
+      // `/status` too. Without it the dev server answers with index.html and
+      // a 200, so the Dependencies page's module-status query fails on JSON
+      // parsing rather than on a status code — which reads as "the registry is
+      // broken" instead of "this path is not proxied".
+      "/status": { target: API_TARGET, changeOrigin: true },
     },
   },
   preview: { port: 5201 },

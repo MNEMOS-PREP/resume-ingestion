@@ -3,7 +3,7 @@
   Repo: https://github.com/MNEMOS-PREP/resume-ingestion
   Spec: plan_in_depth/M01_Resume_Ingestion.md
   The machine-readable version is module.json. This is the one for humans.
-  Last updated: 2026-08-18
+  Last updated: 2026-08-23
 ===============================================================================
 
 THE SHORT VERSION
@@ -37,6 +37,42 @@ UPSTREAM
                       `scanned_against` and a per-label `concept_source` of
                       "m04" or "offline_fallback". Nothing that came from the
                       offline table is ever presented as ontology.
+
+
+PYTHON PACKAGES THAT CHANGE WHAT WE CAN READ
+-------------------------------------------------------------------------------
+Not upstream MODULES, but they degrade the same way and they are reported the
+same way: GET /v1/capabilities says what this deployment can actually read, and
+the upload screen asks before it renders a control. A dropzone that accepts a
+PDF on a server with no PDF library is a control that looks live and does
+nothing, which reads as a broken product rather than an unfinished one.
+
+  pymupdf          REQUIRED for FR-1.1 / FR-1.3 / FR-1.4.
+                   The text layer, per-word bounding boxes, page count, and
+                   the column detection that stops a two-column resume from
+                   being read as word salad.
+                   Without it: PDF upload answers 503 with a named message and
+                   the paste path in it. Everything else is unaffected.
+
+  python-docx      REQUIRED for FR-1.1 (.docx half).
+                   Paragraphs, and tables flattened to `key: value` lines -
+                   which is how half the Canva templates lay out education.
+                   Without it: DOCX upload answers 503, named, same fallback.
+
+  python-multipart REQUIRED for POST /v1/resumes.
+                   FastAPI needs it to read a file part at all.
+
+  paddleocr        OPTIONAL - `pip install -e ".[ocr]"`. FR-1.16, EC-1.2.
+  (or pytesseract) Several hundred megabytes that every CI run would otherwise
+                   pay for, to serve the minority of resumes that are scans.
+                   Without it: a scanned PDF is a NAMED error pointing at the
+                   paste path, never a silent empty parse. That is the half of
+                   EC-1.2 that actually matters, and it holds either way.
+                   With it: the parse proceeds, `ocr_used` is true, and every
+                   confidence on the row is reduced by 0.15 (spec §6.2.6).
+
+The paste path - POST /v1/resumes/from-text - depends on none of the above and
+is what every named intake error points at. It must never be the broken one.
 
 
 THE RULE THIS MODULE KEEPS BREAKING, AND WHY IT MATTERS

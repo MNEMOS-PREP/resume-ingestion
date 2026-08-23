@@ -37,3 +37,11 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# Content-addressed artifact storage (storage.py, FR-1.2).
+#
+# These are students' resumes. The digest is the filename, so a committed blob
+# is a real document in the repository history for ever — and "immutably
+# stored" is a property of the object store, never a reason to version it.
+# Override the location with M01_BLOB_ROOT.
+blobs/

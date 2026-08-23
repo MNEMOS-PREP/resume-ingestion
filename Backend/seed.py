@@ -42,8 +42,7 @@ def seed():
         Resume(
             candidate_id=c2,
             raw_text=(
-                "Fullstack developer. Skilled in Javascript, React, SQL, and database "
-                "transactions."
+                "Fullstack developer. Skilled in Javascript, React, SQL, and database transactions."
             ),
             parsed_skills=["SQL", "Transactions"],
             resolved_concepts={

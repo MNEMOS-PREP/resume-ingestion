@@ -1,0 +1,141 @@
+{
+  "set": "conventional",
+  "note": "Resumes in the shapes a Word or LaTeX template produces. These should be the easy cases; if segmentation drops here, something structural broke.",
+  "resumes": [
+    {
+      "id": "conventional-01-latex",
+      "note": "The moderncv/Overleaf shape. ALL CAPS headings, en-dash date ranges, one bullet glyph throughout.",
+      "preamble": "contact",
+      "sections": [
+        ["EDUCATION", "education"],
+        ["EXPERIENCE", "experience"],
+        ["PROJECTS", "projects"],
+        ["TECHNICAL SKILLS", "skills"]
+      ],
+      "skills": ["Python", "C++", "Java", "PyTorch", "Docker", "PostgreSQL", "Git"],
+      "text": [
+        "ANANYA KRISHNAN",
+        "ananya.k22@example.com | +91 98450 11223 | github.com/ananyak",
+        "",
+        "EDUCATION",
+        "Amrita Vishwa Vidyapeetham, Coimbatore",
+        "B.Tech Computer Science and Engineering, 2022 – 2026, CGPA 8.6",
+        "",
+        "EXPERIENCE",
+        "- Backend Intern, Freshworks, May 2025 – Jul 2025.",
+        "  Rewrote the notification fan-out to use a queue, cutting p99 latency from 1.4s to 210ms.",
+        "",
+        "PROJECTS",
+        "- Built a handwriting recognition model in PyTorch, reaching 91% accuracy on a 14k-sample set.",
+        "- Implemented a B-tree index from scratch to compare against PostgreSQL's on a 2M-row table.",
+        "",
+        "TECHNICAL SKILLS",
+        "Python, C++, Java, PyTorch, Docker, PostgreSQL, Git"
+      ]
+    },
+    {
+      "id": "conventional-02-word",
+      "note": "The Word default. Title Case headings, colon-suffixed skills line, mixed bullet glyphs within one document.",
+      "preamble": "contact",
+      "sections": [
+        ["Objective", "summary"],
+        ["Education", "education"],
+        ["Internships", "experience"],
+        ["Academic Projects", "projects"],
+        ["Skills", "skills"],
+        ["Certifications", "certifications"]
+      ],
+      "skills": ["Java", "Spring Boot", "MySQL", "HTML", "CSS", "JavaScript"],
+      "text": [
+        "RAHUL MENON",
+        "rahul.menon@example.com",
+        "",
+        "Objective",
+        "Seeking a backend role where I can work on systems at scale.",
+        "",
+        "Education",
+        "B.E. Information Science, Visvesvaraya Technological University, 2021 - 2025",
+        "Percentage: 78%",
+        "",
+        "Internships",
+        "• Software Developer Intern at Mindtree, Jun 2024 - Aug 2024.",
+        "• Built internal dashboards used by a team of 30 engineers.",
+        "",
+        "Academic Projects",
+        "* Developed a library management system in Java using Spring Boot and MySQL.",
+        "* Created a personal portfolio site with HTML, CSS and JavaScript.",
+        "",
+        "Skills",
+        "Java, Spring Boot, MySQL, HTML, CSS, JavaScript",
+        "",
+        "Certifications",
+        "Oracle Certified Associate, Java SE 8 Programmer"
+      ]
+    },
+    {
+      "id": "conventional-03-numbered",
+      "note": "Numbered bullets and a Summary block. Also carries a superlative with no number behind it, which should raise a flag without changing segmentation.",
+      "preamble": "contact",
+      "sections": [
+        ["Profile", "summary"],
+        ["Education", "education"],
+        ["Projects", "projects"],
+        ["Technologies", "skills"]
+      ],
+      "skills": ["React", "Node.js", "MongoDB", "AWS"],
+      "text": [
+        "SNEHA PATEL",
+        "sneha.patel@example.com | linkedin.com/in/snehapatel",
+        "",
+        "Profile",
+        "Full-stack developer with a focus on developer experience.",
+        "",
+        "Education",
+        "B.Tech Computer Engineering, Nirma University, 2021 - 2025",
+        "CGPA 8.2",
+        "",
+        "Projects",
+        "1. Built a world-class real-time collaboration tool with React and Node.js.",
+        "2. Designed a MongoDB schema serving 40k documents with sub-100ms reads.",
+        "3. Deployed the stack on AWS with a blue-green rollout.",
+        "",
+        "Technologies",
+        "React, Node.js, MongoDB, AWS"
+      ]
+    },
+    {
+      "id": "conventional-04-achievements",
+      "note": "Achievements and Extracurricular sections, which are easy to mislabel as experience.",
+      "preamble": "contact",
+      "sections": [
+        ["EDUCATION", "education"],
+        ["PROJECTS", "projects"],
+        ["ACHIEVEMENTS", "achievements"],
+        ["EXTRACURRICULAR", "extras"],
+        ["SKILLS", "skills"]
+      ],
+      "skills": ["Python", "TensorFlow", "Flask", "SQL"],
+      "text": [
+        "KARTHIK RAJAN",
+        "karthik.rajan@example.com | +91 99400 77881",
+        "",
+        "EDUCATION",
+        "SSN College of Engineering, B.E. CSE, 2022 - 2026, CGPA 9.1",
+        "",
+        "PROJECTS",
+        "- Built a crop disease classifier in TensorFlow, reaching 94% accuracy on 12k leaf images.",
+        "- Deployed it as a Flask service backed by SQL, handling 200 requests/day.",
+        "",
+        "ACHIEVEMENTS",
+        "- Ranked 3rd in the Smart India Hackathon 2024 national finals.",
+        "- Secured a top-200 rank in ICPC Amritapuri regionals.",
+        "",
+        "EXTRACURRICULAR",
+        "- Volunteered as a coding mentor for 40 first-year students.",
+        "",
+        "SKILLS",
+        "Python, TensorFlow, Flask, SQL"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,222 @@
+{
+  "set": "indian-headings",
+  "note": "The heading vocabulary §6.3 names specifically — 'Areas of Interest', 'Position of Responsibility' — plus the rest of what actually appears on Indian campus resumes. This set exists to keep the lexicon honest: it is the one most likely to regress when somebody adds a heading variant and forgets the neighbouring ones.",
+  "resumes": [
+    {
+      "id": "indian-01-por",
+      "note": "'Position of Responsibility' and 'Areas of Interest' — both named in the spec, both absent from the first lexicon this set was run against. POR is annotated as `experience` rather than `extras`: it is a role with a title, a duration and a team, and `extras` is not a claim-bearing section — so filed there it produced no claim and no probe at all.",
+      "preamble": "contact",
+      "sections": [
+        [
+          "ACADEMIC DETAILS",
+          "education"
+        ],
+        [
+          "AREAS OF INTEREST",
+          "skills"
+        ],
+        [
+          "POSITION OF RESPONSIBILITY",
+          "experience"
+        ],
+        [
+          "TECHNICAL SKILLS",
+          "skills"
+        ]
+      ],
+      "skills": [
+        "Operating Systems",
+        "Computer Networks",
+        "C",
+        "Python",
+        "Linux"
+      ],
+      "text": [
+        "VIGNESH SUBRAMANIAN",
+        "vignesh.s@example.com | +91 94440 22110",
+        "",
+        "ACADEMIC DETAILS",
+        "National Institute of Technology Tiruchirappalli",
+        "B.Tech Computer Science, 2021 - 2025, CGPA 8.4",
+        "",
+        "AREAS OF INTEREST",
+        "Operating Systems, Computer Networks",
+        "",
+        "POSITION OF RESPONSIBILITY",
+        "- Coordinator, Pragyan technical festival, 2023 - 2024.",
+        "- Led a team of 12 volunteers across three events.",
+        "",
+        "TECHNICAL SKILLS",
+        "C, Python, Linux"
+      ]
+    },
+    {
+      "id": "indian-02-coursework",
+      "note": "'Relevant Coursework' and 'Scholastic Achievements' — the two most common variants after the obvious ones.",
+      "preamble": "contact",
+      "sections": [
+        [
+          "EDUCATIONAL QUALIFICATIONS",
+          "education"
+        ],
+        [
+          "RELEVANT COURSEWORK",
+          "education"
+        ],
+        [
+          "SCHOLASTIC ACHIEVEMENTS",
+          "achievements"
+        ],
+        [
+          "PROJECTS",
+          "projects"
+        ],
+        [
+          "SOFTWARE SKILLS",
+          "skills"
+        ]
+      ],
+      "skills": [
+        "Data Structures",
+        "Algorithms",
+        "DBMS",
+        "MATLAB",
+        "Simulink",
+        "C++"
+      ],
+      "text": [
+        "PRIYANKA IYER",
+        "priyanka.iyer@example.com",
+        "",
+        "EDUCATIONAL QUALIFICATIONS",
+        "Vellore Institute of Technology, B.Tech ECE, 2022 - 2026, CGPA 8.9",
+        "",
+        "RELEVANT COURSEWORK",
+        "Data Structures, Algorithms, DBMS",
+        "",
+        "SCHOLASTIC ACHIEVEMENTS",
+        "- Awarded the merit scholarship for the top 1% of the 2022 intake.",
+        "",
+        "PROJECTS",
+        "- Simulated a 5G beamforming array in MATLAB and Simulink over 400 trials.",
+        "- Wrote a fixed-point FFT in C++ that runs 3x faster than the float version.",
+        "",
+        "SOFTWARE SKILLS",
+        "MATLAB, Simulink, C++"
+      ]
+    },
+    {
+      "id": "indian-03-training",
+      "note": "'Industrial Training' and 'Co-curricular Activities'. Training is experience; co-curricular is extras, and the two are easy to swap.",
+      "preamble": "contact",
+      "sections": [
+        [
+          "ACADEMICS",
+          "education"
+        ],
+        [
+          "INDUSTRIAL TRAINING",
+          "experience"
+        ],
+        [
+          "MINI PROJECTS",
+          "projects"
+        ],
+        [
+          "CO-CURRICULAR ACTIVITIES",
+          "extras"
+        ],
+        [
+          "COMPUTER PROFICIENCY",
+          "skills"
+        ]
+      ],
+      "skills": [
+        "Embedded C",
+        "Arduino",
+        "Proteus",
+        "AutoCAD"
+      ],
+      "text": [
+        "MOHAMMED ARIF",
+        "m.arif@example.com | +91 97890 44556",
+        "",
+        "ACADEMICS",
+        "Anna University, B.E. Electronics, 2021 - 2025, Percentage 74%",
+        "",
+        "INDUSTRIAL TRAINING",
+        "- Trainee at BHEL Tiruchirappalli, Jun 2024 - Jul 2024.",
+        "- Studied the control loop of a 210 MW boiler feed pump.",
+        "",
+        "MINI PROJECTS",
+        "- Built a line-following robot in Embedded C on an Arduino, finishing a 12m course in 40s.",
+        "",
+        "CO-CURRICULAR ACTIVITIES",
+        "- Member of the IEEE student branch, 2022 onwards.",
+        "",
+        "COMPUTER PROFICIENCY",
+        "Embedded C, Arduino, Proteus, AutoCAD"
+      ]
+    },
+    {
+      "id": "indian-04-personal",
+      "note": "'Personal Details' and 'Declaration' — the block at the foot of a very traditional Indian resume. Declaration is not a section anyone should test on; it must not be mistaken for experience.",
+      "preamble": "contact",
+      "sections": [
+        [
+          "CAREER OBJECTIVE",
+          "summary"
+        ],
+        [
+          "EDUCATION",
+          "education"
+        ],
+        [
+          "WORK EXPERIENCE",
+          "experience"
+        ],
+        [
+          "KEY SKILLS",
+          "skills"
+        ],
+        [
+          "PERSONAL DETAILS",
+          "contact"
+        ],
+        [
+          "DECLARATION",
+          "extras"
+        ]
+      ],
+      "skills": [
+        "Excel",
+        "Tally",
+        "SAP"
+      ],
+      "text": [
+        "LAKSHMI NARAYANAN",
+        "lakshmi.n@example.com",
+        "",
+        "CAREER OBJECTIVE",
+        "To work in a finance operations role in a growing organisation.",
+        "",
+        "EDUCATION",
+        "B.Com, University of Madras, 2020 - 2023, Percentage 71%",
+        "",
+        "WORK EXPERIENCE",
+        "- Accounts Assistant, Sundaram Traders, Aug 2023 - Present.",
+        "- Reconciled 300 vendor invoices a month in Tally.",
+        "",
+        "KEY SKILLS",
+        "Excel, Tally, SAP",
+        "",
+        "PERSONAL DETAILS",
+        "Date of Birth: 14 March 2002",
+        "Languages Known: Tamil, English",
+        "",
+        "DECLARATION",
+        "I hereby declare that the above information is true to the best of my knowledge."
+      ]
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 /**
  * The read-back: what we found on the resume, and where each id came from.
  *
- * Spec: plan_in_depth/M01_Resume_Ingestion.md §5, §8, FR-1.7
+ * Spec: plan_in_depth/M01_Resume_Ingestion.md §5, §6.4, §8, FR-1.7
  *
  * ── The one thing this file exists to get right ──────────────────────────────
  *
@@ -12,9 +12,18 @@
  *
  * So unmapped skills get their own group, visibly hatched and colourless:
  * outside the scale rather than at the bottom of it. And every mapped skill
- * carries whether M04 confirmed its id or M02's offline table guessed it,
- * because an id is a licence for M05 to build questions on and M13 to score
+ * carries whether the ontology confirmed its id or an offline table produced
+ * it, because an id is a licence for M05 to build questions on and M13 to score
  * against.
+ *
+ * ── What `context` adds ─────────────────────────────────────────────────────
+ *
+ * §6.4 splits a claim of *familiarity* from a claim of *use*: "Python" on a
+ * skills line is the first, "built a route planner in Python" is the second,
+ * and M05 asks much harder questions about the second. That distinction is
+ * shown here because it is the most useful thing on the screen for a student
+ * deciding what to revise — a skill listed and never used is the easiest thing
+ * on a resume to get caught on.
  *
  * ── Why there is no bar on this screen ───────────────────────────────────────
  *
@@ -24,7 +33,7 @@
  * (`MasteryBar`) precisely so it appears only where a measurement exists.
  */
 
-import type { ConceptSource, Resume, ScannedAgainst } from "../types";
+import type { ConceptSource, Resume, ScannedAgainst, SkillContext } from "../types";
 import { Panel, Pill, Section } from "../ui/primitives";
 
 const SOURCE_COPY: Record<
@@ -34,28 +43,46 @@ const SOURCE_COPY: Record<
   m04: {
     label: "ontology",
     tone: "confirmed",
-    hint: "M04 resolved this label to a concept in the skill graph. Anything downstream can test it.",
+    hint: "The skill graph resolved this label to a concept. Anything downstream can test it.",
   },
   offline_fallback: {
     label: "guessed offline",
     tone: "reported",
     hint:
-      "M04 was unreachable, so this id comes from a five-entry table in M01. " +
+      "The skill graph was unreachable, so this id comes from a five-entry table in M01. " +
       "It has not been confirmed to exist in the ontology.",
+  },
+};
+
+const CONTEXT_COPY: Record<SkillContext, { label: string; hint: string }> = {
+  experience_body: {
+    label: "used at work",
+    hint: "You described using this in a role. Expect the hardest questions here.",
+  },
+  project_tech: {
+    label: "used in a project",
+    hint: "You described building something with this, so expect to be asked how.",
+  },
+  education: {
+    label: "coursework",
+    hint: "This came from your education section, so expect conceptual questions.",
+  },
+  skills_list: {
+    label: "listed only",
+    hint: "This appears only in your skills list, with no story attached to it.",
   },
 };
 
 export function ScanSourceNote({ scannedAgainst }: { scannedAgainst: ScannedAgainst }) {
   if (scannedAgainst === "m04") {
     return (
-      <p className="text-xs text-ink-soft">
-        Scanned against M04&rsquo;s full concept ontology.
-      </p>
+      <p className="text-xs text-ink-soft">Scanned against the full concept ontology.</p>
     );
   }
   return (
     <p className="text-xs text-ink-soft">
-      Scanned against M01&rsquo;s five-concept offline lexicon, because M04 was unreachable.{" "}
+      Scanned against M01&rsquo;s five-concept offline lexicon, because the skill graph was
+      unreachable.{" "}
       <strong className="font-medium text-ink">
         Skills outside those five were not looked for at all
       </strong>{" "}
@@ -65,8 +92,25 @@ export function ScanSourceNote({ scannedAgainst }: { scannedAgainst: ScannedAgai
 }
 
 export function SkillSet({ resume }: { resume: Resume }) {
-  const mapped = resume.parsed_skills.filter((s) => s in resume.resolved_concepts);
-  const confirmedCount = mapped.filter((s) => resume.concept_source[s] === "m04").length;
+  const mapped = resume.parsed_skills.filter((skill) => skill in resume.resolved_concepts);
+  const confirmedCount = mapped.filter(
+    (skill) => resume.concept_source[skill] === "m04",
+  ).length;
+
+  /** surface (lowercased) -> the strongest context it was written in. */
+  const contexts = new Map<string, SkillContext>();
+  const rank: SkillContext[] = ["skills_list", "education", "project_tech", "experience_body"];
+  for (const mention of resume.skill_mentions) {
+    const key = mention.surface.toLowerCase();
+    const current = contexts.get(key);
+    if (!current || rank.indexOf(mention.context) > rank.indexOf(current)) {
+      contexts.set(key, mention.context);
+    }
+  }
+
+  const listedOnly = resume.parsed_skills.filter(
+    (skill) => (contexts.get(skill.toLowerCase()) ?? "skills_list") === "skills_list",
+  );
 
   return (
     <>
@@ -89,9 +133,10 @@ export function SkillSet({ resume }: { resume: Resume }) {
           </div>
         ) : (
           <Panel className="px-4 py-3">
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
               {mapped.map((skill) => {
                 const copy = SOURCE_COPY[resume.concept_source[skill]];
+                const context = contexts.get(skill.toLowerCase()) ?? "skills_list";
                 return (
                   <span key={skill} className="inline-flex items-center gap-1.5">
                     <span className="text-sm text-ink">{skill}</span>
@@ -101,6 +146,9 @@ export function SkillSet({ resume }: { resume: Resume }) {
                     >
                       {copy.label}
                     </Pill>
+                    <span className="provenance" title={CONTEXT_COPY[context].hint}>
+                      {CONTEXT_COPY[context].label}
+                    </span>
                   </span>
                 );
               })}
@@ -131,56 +179,25 @@ export function SkillSet({ resume }: { resume: Resume }) {
           </Panel>
         </Section>
       )}
-    </>
-  );
-}
 
-/**
- * What the module is named after, and does not do.
- *
- * Kept on the screen rather than in a backlog file. Anyone who opens this
- * module expecting the spec's product — scored, probe-generating, span-cited
- * claims — should learn in one glance that it is not here, rather than
- * concluding the extraction is broken.
- */
-export function ClaimsNotBuilt() {
-  return (
-    <Section label="Not built yet">
-      <Panel tone="sunken" className="px-4 py-3.5">
-        <p className="text-sm text-ink-soft">
-          This module is named <em>Claim Extraction</em> and extracts no claims. Nothing below{" "}
-          <code className="provenance">SkillMention</code> in the spec&rsquo;s §5 exists.
-        </p>
-        <ul className="mt-2 space-y-1.5 text-sm text-ink-soft">
-          <li>
-            <strong className="font-medium text-ink">SourceSpan</strong> &mdash; &ldquo;the atom of
-            traceability; everything downstream cites one of these&rdquo;. Without it there is no
-            PDF highlight, no verifiable quote for M13, and nothing for M19&rsquo;s ledger. First
-            thing to build, and it should use{" "}
-            <code className="provenance">ai_core.evidence.EvidenceSpan</code> rather than a second
-            type.
-          </li>
-          <li>
-            <strong className="font-medium text-ink">ResumeClaim + defensibility scores</strong>{" "}
-            &mdash; specificity, verifiability, ownership clarity, recency, and the red/yellow/green
-            band. Four of five downstream modules read claims, so none of them can consume M01
-            today.
-          </li>
-          <li>
-            <strong className="font-medium text-ink">Probe generation</strong> &mdash; the 1&ndash;3
-            escalating questions per claim that are this module&rsquo;s product for M06.
-          </li>
-          <li>
-            <strong className="font-medium text-ink">Sections, entities, PDF and DOCX</strong>{" "}
-            &mdash; pasted text is the only input, and it is one of three the spec requires.
-          </li>
-        </ul>
-        <p className="mt-2.5 text-xs text-ink-faint">
-          One gap is a liability rather than a missing feature: FR-1.17 (P0) requires the contact
-          block to be PII-classed and withheld from logs and models. The whole resume currently
-          sits in one column and is returned verbatim by two endpoints.
-        </p>
-      </Panel>
-    </Section>
+      {listedOnly.length > 0 && (
+        <Section label="Listed, but never used in a bullet">
+          <Panel tone="sunken" className="px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              {listedOnly.map((skill) => (
+                <span key={skill} className="text-sm text-ink-soft">
+                  {skill}
+                </span>
+              ))}
+            </div>
+            <p className="mt-2.5 text-xs text-ink-soft">
+              You list these but no project or role bullet mentions them. A skill with no story
+              attached is the easiest thing on a resume to get caught on &mdash; either attach it
+              to something you built, or take it off the list.
+            </p>
+          </Panel>
+        </Section>
+      )}
+    </>
   );
 }

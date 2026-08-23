@@ -135,6 +135,65 @@
     font-size: 0.9375rem;
   }
 
+  /*
+    Visible focus, everywhere, once (§8.4: "full keyboard navigation; visible
+    focus rings").
+
+    This was the module's worst accessibility hole and the easiest to miss:
+    the inputs set `outline-none` and changed only their border colour, the
+    buttons had no focus style at all, and the Claim Map's j/k navigation
+    therefore *worked perfectly and was invisible*. A keyboard user could move
+    between claims with no way to see which one they were on.
+
+    `:focus-visible` rather than `:focus`, so a mouse click does not leave a
+    ring behind — that is the reason people reach for `outline-none` in the
+    first place, and it is solvable without giving up the ring.
+
+    Declared here rather than per-component because the failure mode is one
+    component being forgotten, and one rule cannot forget.
+  */
+  :where(a, button, input, textarea, select, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  /* A focus ring drawn under an adjacent panel is not a visible focus ring. */
+  :where(a, button, input, textarea, select, summary, [tabindex]):focus-visible {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Keyboard users need to reach the content without tabbing the whole nav. */
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 50;
+  }
+
+  .skip-link:focus {
+    left: 0.5rem;
+    top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-brand);
+    border-radius: 0.375rem;
+    color: var(--color-ink);
+    font-size: 0.875rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
   /* Severities, scores and counts are all compared against each other. */
   table,
   time,

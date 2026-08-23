@@ -1,0 +1,324 @@
+# Skill aliases — the surface forms students write, and what they mean.
+#
+# Spec §6.4: *"The alias table is a versioned YAML ... seeded with ~2,000
+# entries and grown from the unmapped queue."*  This is the seed. It is nowhere
+# near two thousand and it is not trying to be: every entry here earns its place
+# by being a form that students actually write and that an exact match would
+# miss, and a table padded to hit a number is a table nobody curates.
+#
+# ── What this file is NOT ────────────────────────────────────────────────────
+#
+# It is not the ontology. M04 owns concepts; this maps a student's spelling to a
+# canonical NAME, and the resolver then asks M04 what concept that name is. A
+# hit here is `alias_exact` against a curated table, and it still carries
+# `offline_alias` provenance if M04 never confirms the concept exists — the two
+# facts are separate and both travel.
+#
+# ── How to grow it ───────────────────────────────────────────────────────────
+#
+# From `GET /v1/resumes/{id}/skills` → `unmapped_queue`, which is ordered by how
+# often students wrote the thing. §6.4 calls that queue "a feature, not debt —
+# it is how the ontology learns what students actually write". Take the top of
+# the list, decide whether it is one canonical name or several, add it here.
+#
+# Format:
+#   canonical name:
+#     - the spellings that mean it
+#
+# Canonical names are Title Case as a human would write them. Aliases are
+# matched case-insensitively and after punctuation folding, so "node.js" and
+# "Node JS" both only need to appear once in whichever form reads clearest.
+
+# ── Languages ────────────────────────────────────────────────────────────────
+Python:
+  - python3
+  - python 3
+  - py
+JavaScript:
+  - js
+  - java script
+  - ecmascript
+  - es6
+TypeScript:
+  - ts
+Java:
+  - core java
+  - java se
+  - j2se
+C:
+  - c language
+  - ansi c
+  - c programming
+C++:
+  - cpp
+  - c plus plus
+  - cplusplus
+C#:
+  - c sharp
+  - csharp
+  - dotnet c#
+Go:
+  - golang
+Kotlin: []
+Swift: []
+Rust: []
+Ruby: []
+PHP: []
+R: []
+MATLAB:
+  - matlab/simulink
+Scala: []
+Perl: []
+Shell Scripting:
+  - bash scripting
+  - shell script
+  - shell
+  - bash
+SQL:
+  - structured query language
+  - sql queries
+
+# ── Web and frontend ─────────────────────────────────────────────────────────
+React:
+  - react.js
+  - reactjs
+  - react js
+Next.js:
+  - nextjs
+  - next js
+Vue.js:
+  - vuejs
+  - vue
+Angular:
+  - angularjs
+  - angular js
+Node.js:
+  - nodejs
+  - node js
+  - node
+Express.js:
+  - expressjs
+  - express js
+  - express
+HTML:
+  - html5
+CSS:
+  - css3
+Tailwind CSS:
+  - tailwind
+  - tailwindcss
+Bootstrap: []
+jQuery:
+  - jquery js
+Redux: []
+
+# ── Backend and frameworks ───────────────────────────────────────────────────
+Django:
+  - django rest framework
+  - drf
+Flask: []
+FastAPI:
+  - fast api
+Spring Boot:
+  - springboot
+  - spring
+  - spring framework
+.NET:
+  - dotnet
+  - dot net
+  - asp.net
+  - asp net
+Laravel: []
+Rails:
+  - ruby on rails
+  - ror
+GraphQL:
+  - graph ql
+REST API:
+  - rest apis
+  - restful api
+  - restful apis
+  - rest
+
+# ── Data stores ──────────────────────────────────────────────────────────────
+PostgreSQL:
+  - postgres
+  - psql
+  - postgre sql
+MySQL:
+  - my sql
+MongoDB:
+  - mongo
+  - mongo db
+Redis: []
+SQLite:
+  - sql lite
+Oracle Database:
+  - oracle db
+  - oracle sql
+Cassandra:
+  - apache cassandra
+Elasticsearch:
+  - elastic search
+  - elk
+Firebase:
+  - firestore
+
+# ── ML and data ──────────────────────────────────────────────────────────────
+TensorFlow:
+  - tensor flow
+  - tf
+  - tensorflow 2
+Keras: []
+PyTorch:
+  - py torch
+  - torch
+scikit-learn:
+  - sklearn
+  - scikit learn
+  - sci-kit learn
+NumPy:
+  - numpy array
+  - np
+pandas:
+  - pandas dataframe
+Matplotlib: []
+Seaborn: []
+OpenCV:
+  - open cv
+  - cv2
+NLTK: []
+spaCy:
+  - spacy nlp
+Hugging Face:
+  - huggingface
+  - transformers
+Machine Learning:
+  - ml
+  - machine-learning
+Deep Learning:
+  - dl
+  - deep-learning
+Natural Language Processing:
+  - nlp
+Computer Vision:
+  - cv
+  - image processing
+Data Analysis:
+  - data analytics
+  - data analyst
+Power BI:
+  - powerbi
+  - power-bi
+Tableau: []
+Excel:
+  - ms excel
+  - microsoft excel
+  - advanced excel
+
+# ── Infrastructure ───────────────────────────────────────────────────────────
+Docker:
+  - docker containers
+  - containerisation
+  - containerization
+Kubernetes:
+  - k8s
+  - kube
+AWS:
+  - amazon web services
+  - aws cloud
+Azure:
+  - microsoft azure
+Google Cloud:
+  - gcp
+  - google cloud platform
+Terraform: []
+Jenkins: []
+CI/CD:
+  - ci cd
+  - cicd
+  - continuous integration
+  - continuous deployment
+Git:
+  - git version control
+  - version control
+GitHub:
+  - git hub
+GitLab:
+  - git lab
+Linux:
+  - linux os
+  - unix
+  - ubuntu
+Nginx: []
+Kafka:
+  - apache kafka
+RabbitMQ:
+  - rabbit mq
+
+# ── Embedded and hardware ────────────────────────────────────────────────────
+Embedded C:
+  - embedded-c
+Arduino:
+  - arduino uno
+Raspberry Pi:
+  - raspberrypi
+  - rpi
+VHDL: []
+Verilog: []
+AutoCAD:
+  - auto cad
+SolidWorks:
+  - solid works
+Simulink: []
+Proteus: []
+
+# ── Fundamentals — the ones an interview actually probes ─────────────────────
+Data Structures:
+  - data structure
+  - ds
+  - data structures and algorithms
+  - dsa
+Algorithms:
+  - algorithm
+  - algo
+Object-Oriented Programming:
+  - oop
+  - oops
+  - object oriented programming
+  - object oriented
+Operating Systems:
+  - os
+  - operating system
+Computer Networks:
+  - computer networking
+  - networking
+  - cn
+DBMS:
+  - database management system
+  - database management systems
+  - databases
+System Design:
+  - systems design
+  - hld
+  - lld
+Dynamic Programming:
+  - dp
+Recursion: []
+Hashing:
+  - hash map
+  - hashmap
+  - hash table
+Graph Theory:
+  - graphs
+Operating System Concepts:
+  - process scheduling
+  - deadlocks
+Compiler Design:
+  - compilers
+Software Testing:
+  - unit testing
+  - test automation
+Agile:
+  - agile methodology
+  - scrum
