@@ -40,6 +40,31 @@ import type {
 const BASE = import.meta.env.VITE_API_BASE ?? "";
 
 /**
+ * M01's own prefix in the platform shell.
+ *
+ * The shell has no gateway; it proxies `/v1/<noun>` to whichever module owns
+ * that noun, from a table it keeps. `resumes` is M01's, so the resume endpoints
+ * route correctly — but a per-module META endpoint has no noun anybody owns.
+ * `capabilities` was in no table, so `GET /v1/capabilities` never reached M01,
+ * `useCapabilities` failed, and the upload control silently disappeared inside
+ * the shell while working perfectly standalone.
+ *
+ * The shell already provides `/sys/<module>/...` for exactly this. So a meta
+ * request tries the plain path first — which is what standalone serves — and
+ * falls back to the module-scoped one. Both apps work, and neither needs a
+ * table entry that every other module would also want to claim.
+ */
+const SYS = "/sys/m01";
+
+async function meta<T>(path: string): Promise<T> {
+  try {
+    return await api.get<T>(path);
+  } catch {
+    return await api.get<T>(`${SYS}${path}`);
+  }
+}
+
+/**
  * An intake refusal, with the sentence the student should read.
  *
  * The backend answers a bad upload with `{code, message, fallback}` rather than
@@ -122,7 +147,7 @@ function invalidateResume(qc: ReturnType<typeof useQueryClient>, resume: Resume)
 export function useHealth() {
   return useQuery({
     queryKey: m01Keys.health,
-    queryFn: () => api.get<Health>("/health"),
+    queryFn: () => meta<Health>("/health"),
     retry: false,
   });
 }
@@ -131,7 +156,7 @@ export function useHealth() {
 export function useModuleStatus() {
   return useQuery({
     queryKey: m01Keys.status,
-    queryFn: () => api.get<ModuleStatus>("/status"),
+    queryFn: () => meta<ModuleStatus>("/status"),
     retry: false,
   });
 }
@@ -139,7 +164,7 @@ export function useModuleStatus() {
 export function useDeps() {
   return useQuery({
     queryKey: m01Keys.deps,
-    queryFn: () => api.get<Deps>("/v1/deps"),
+    queryFn: () => meta<Deps>("/v1/deps"),
     retry: false,
   });
 }
@@ -153,7 +178,7 @@ export function useDeps() {
 export function useCapabilities() {
   return useQuery({
     queryKey: m01Keys.capabilities,
-    queryFn: () => api.get<Capabilities>("/v1/capabilities"),
+    queryFn: () => meta<Capabilities>("/v1/capabilities"),
     staleTime: Infinity,
     retry: false,
   });

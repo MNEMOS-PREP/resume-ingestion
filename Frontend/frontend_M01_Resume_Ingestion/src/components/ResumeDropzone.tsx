@@ -71,9 +71,37 @@ export function ResumeDropzone({
   const [pasting, setPasting] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
-  const uploadable = Object.entries(capabilities?.accepts ?? {})
-    .filter(([mime, ok]) => ok && mime !== "text/plain")
-    .map(([mime]) => mime);
+  /**
+   * What this server said it can read — or, when it has not answered, what a
+   * server normally can.
+   *
+   * ── The bug this default exists to fix ─────────────────────────────────
+   *
+   * `canUpload` used to be "capabilities said yes", so an UNKNOWN answer —
+   * still loading, or a `/v1/capabilities` that is not proxied in whichever
+   * app is mounting this — hid the upload control completely and left the
+   * paste box as the only thing on the screen. No error, no explanation, and
+   * nothing to click. "Can't I upload a PDF?" is the correct reaction to that,
+   * and it is the exact silent failure this module is written against.
+   *
+   * Unknown is now treated as "probably fine, let them try", because the cost
+   * of being wrong is asymmetric:
+   *
+   *   · wrong optimistically → the upload returns a NAMED error saying what
+   *     happened and offering the paste path. One extra click.
+   *   · wrong pessimistically → the feature is invisible and the student
+   *     concludes it does not exist.
+   *
+   * The backend already refuses anything it cannot read, with a sentence
+   * written for a student. That is the safety net, so the control does not
+   * need to be hidden to be safe — and only an EXPLICIT no hides it.
+   */
+  const known = capabilities !== undefined;
+  const uploadable = known
+    ? Object.entries(capabilities.accepts)
+        .filter(([mime, ok]) => ok && mime !== "text/plain")
+        .map(([mime]) => mime)
+    : ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
   const canUpload = uploadable.length > 0;
   const megabytes = Math.round((capabilities?.max_bytes ?? 10 * 1024 * 1024) / (1024 * 1024));
 
@@ -129,7 +157,7 @@ export function ResumeDropzone({
         </div>
       )}
 
-      {!canUpload && capabilities && (
+      {!canUpload && known && (
         <Panel tone="sunken" className="px-4 py-3">
           <p className="text-sm text-ink">File upload is not available on this server.</p>
           <p className="mt-1 text-sm text-ink-soft">
