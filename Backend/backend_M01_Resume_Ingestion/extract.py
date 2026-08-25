@@ -115,6 +115,23 @@ _TRAILING_NOISE = re.compile(
     re.IGNORECASE,
 )
 
+#: A line ending in a hyphen is a word the page layout broke in half.
+#:
+#: A PDF wraps "Multi-modal Learning" at the hyphen it already had, and the two
+#: halves arrive as two lines. Split on the line break they become two skills —
+#: "Multi-" and "modal Learning" — and both are then read back to the student
+#: as things they claimed. That is the read-back contradicting their own
+#: document, which is the failure this module cares most about, and it is
+#: invisible from the outside: three plausible-looking chips where the resume
+#: has two.
+#:
+#: Only rejoined when the next line CONTINUES a word — it begins lower-case,
+#: with no bullet glyph in front of it. A list item that genuinely ends in a
+#: hyphen is followed by a capital or a bullet, and joining those would invent
+#: a skill rather than repair one.
+_WRAPPED_WORD = re.compile(r"-\s*$")
+_CONTINUES_A_WORD = re.compile(r"^[a-z]")
+
 #: Leading bullet glyphs and trailing punctuation, stripped.
 #:
 #: The leading dot is conditional: `.NET` keeps it, `. NET` does not. A dot
@@ -209,9 +226,26 @@ def _split_conjunctions(label: str) -> list[str]:
     return [p.strip() for p in parts if p.strip() and len(p.split()) <= 3]
 
 
+def _rejoin_wrapped(lines: list[str]) -> list[str]:
+    """Put back together a word the page layout broke across two lines.
+
+    The hyphen is KEPT. A resume PDF wrapping at a hyphen the author already
+    typed is far commoner than true typographic hyphenation, and "Multimodal
+    Learning" is a different string from the one on the page — handing that
+    back is the same class of error as splitting it, just quieter.
+    """
+    out: list[str] = []
+    for line in lines:
+        if out and _WRAPPED_WORD.search(out[-1]) and _CONTINUES_A_WORD.match(line.strip()):
+            out[-1] = out[-1].rstrip() + line.strip()
+            continue
+        out.append(line)
+    return out
+
+
 def _list_lines(text: str) -> list[str]:
     """The lines of the document that are enumerating something."""
-    lines = text.splitlines()
+    lines = _rejoin_wrapped(text.splitlines())
     out: list[str] = []
     in_list = False
 

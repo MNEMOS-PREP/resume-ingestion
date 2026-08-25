@@ -220,3 +220,77 @@ def test_a_student_added_skill_never_invents_a_concept_id(client, m04_up):
     assert "Terraform" in after["parsed_skills"]
     assert "Terraform" in after["unresolved_skills"]
     assert "Terraform" not in after["resolved_concepts"]
+
+
+# ---------------------------------------------------------------------------
+#  A word the page layout broke in half
+# ---------------------------------------------------------------------------
+
+WRAPPED = """PRIYA SHARMA
+
+PROJECTS
+- Built a sentiment classifier on review data.
+
+SKILLS
+Python, NLP, Multi-
+modal Learning, PyTorch
+"""
+
+
+def test_a_skill_wrapped_at_its_hyphen_is_one_skill_not_two(client, m04_up):
+    """A PDF wrapping "Multi-modal Learning" must not report three skills.
+
+    The layout breaks the line at a hyphen the author already typed. Split on
+    the break it becomes "Multi-" and "modal Learning", and both are then read
+    back to the student as things they claimed — the read-back contradicting
+    their own document, which is the failure this module cares most about.
+    """
+    m04_up()
+    data = _ingest(client, WRAPPED)
+
+    assert "Multi-modal Learning" in data["parsed_skills"]
+    assert "Multi-" not in data["parsed_skills"]
+    assert "modal Learning" not in data["parsed_skills"]
+
+
+def test_a_rejoined_skill_still_points_at_the_words_it_came_from(client, m04_up):
+    """The repair must not cost the skill its span.
+
+    `extract.py` rejoins the halves, so the label is "Multi-modal Learning"
+    while the document still reads "Multi-\nmodal Learning". A literal search
+    finds nothing, and the skill would land in the read-back with no span and
+    no context — the one promise this module makes about every fact, quietly
+    untrue for exactly the skills that needed repairing.
+    """
+    m04_up()
+    data = _ingest(client, WRAPPED)
+    source = data["redacted_text"]
+
+    mention = next(
+        (m for m in data["skill_mentions"] if m["surface"] == "Multi-modal Learning"),
+        None,
+    )
+    assert mention is not None, "the rejoined skill was never located in the document"
+
+    span = mention["span"]
+    # The span is a verbatim slice and keeps the break; the surface closes it.
+    assert source[span["start"] : span["end"]] == span["text"]
+    assert "\n" in span["text"]
+    assert "\n" not in mention["surface"]
+
+
+def test_a_list_item_that_ends_in_a_hyphen_is_not_glued_to_the_next(client, m04_up):
+    """The other side of the line.
+
+    Only a lower-case continuation is a broken word. A capital after the break
+    is the next list item, and joining those would invent a skill rather than
+    repair one.
+    """
+    m04_up()
+    data = _ingest(
+        client,
+        "PRIYA SHARMA\n\nSKILLS\nC++, Java -\nPython, Docker\n",
+    )
+
+    assert "Python" in data["parsed_skills"]
+    assert not any("Java -Python" in skill for skill in data["parsed_skills"])

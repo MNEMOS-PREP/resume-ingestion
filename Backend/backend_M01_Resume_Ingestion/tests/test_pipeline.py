@@ -947,3 +947,64 @@ def test_an_upload_of_the_wrong_type_names_the_problem_and_the_way_out(client, m
     assert detail["code"] == "legacy_doc"
     assert detail["fallback"] == "text"
     assert "save as PDF or .docx" in detail["message"]
+
+
+# ---------------------------------------------------------------------------
+#  FR-1.10 — a question has to look like it came from what they wrote
+# ---------------------------------------------------------------------------
+
+UNMAPPED_PROJECTS = """PRIYA SHARMA
+
+PROJECTS
+- Built a route planner for the campus shuttle.
+- Developed a sentiment classifier on review data.
+- Created an attendance dashboard for the department.
+- Implemented a chatbot for hostel queries.
+"""
+
+
+def test_two_claims_that_map_to_nothing_do_not_get_the_same_questions(client, m04_up):
+    """The subject used to be a constant whenever nothing resolved.
+
+    Every unmapped claim then got the same three questions, verbatim — six
+    risky bullets producing eighteen near-identical lines, which is what makes
+    generated output read as generated. The ladder was never the problem; the
+    noun was.
+    """
+    m04_up()
+    data = _ingest(client, UNMAPPED_PROJECTS)
+
+    claims = [c for c in data["claims"] if c["claim_type"] in {"built", "used", "improved"}]
+    assert len(claims) >= 3, "the fixture needs several engineering claims to compare"
+
+    openers = [c["probes"][0]["question"] for c in claims]
+    assert len(set(openers)) == len(openers), f"the same opener was reused: {openers}"
+
+
+def test_a_probe_names_something_the_bullet_actually_says(client, m04_up):
+    """Grounded in the sentence, not in a family constant."""
+    m04_up()
+    data = _ingest(client, UNMAPPED_PROJECTS)
+
+    claim = next(c for c in data["claims"] if "route planner" in c["text"])
+    questions = " ".join(p["question"] for p in claim["probes"]).casefold()
+
+    assert "route planner" in questions
+    assert "this project" not in questions
+
+
+def test_a_bullet_with_no_recognisable_subject_still_gets_a_question(client, m04_up):
+    """The fallback is still there — it is just no longer the common case.
+
+    A bullet the reader cannot pull a subject out of must not produce an empty
+    or malformed question; it produces the family's generic one, which is what
+    that constant was always for.
+    """
+    m04_up()
+    data = _ingest(client, "PRIYA SHARMA\n\nPROJECTS\n- Contributed to several internal tools.\n")
+
+    claim = data["claims"][0]
+    assert claim["probes"]
+    for probe in claim["probes"]:
+        assert probe["question"].strip()
+        assert "{subject}" not in probe["question"]

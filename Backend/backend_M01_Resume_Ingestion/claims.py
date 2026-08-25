@@ -723,7 +723,7 @@ _PROBE_FAMILIES: dict[str, ProbeFamily] = {
         "this project",
         {
             0: (
-                "Walk me through what you actually built here, in your own words.",
+                "Walk me through {subject} — what did you actually build, in your own words?",
                 ["scope of the work", "what was yours versus the team's"],
             ),
             1: (
@@ -839,6 +839,77 @@ _FAMILY_FOR: dict[ClaimType, str] = {
 }
 
 
+#: Every verb the classifier knows, flattened. A capitalised run that starts
+#: with one of these is a sentence opener ("Built a route planner"), not the
+#: name of the thing being claimed.
+_ALL_VERBS = frozenset(verb for _, verbs in _CLAIM_VERBS for verb in verbs)
+
+#: Two or more capitalised words in a row: "Crop Disease Detection", "Smart
+#: India Hackathon". This is what a project is actually called on a resume, and
+#: it is the most specific handle a deterministic reader can get on a bullet.
+_PROPER_RUN = re.compile(r"\b[A-Z][\w+#.]*(?:[ -][A-Z][\w+#.]*)+")
+
+#: What follows the verb, up to the point the sentence turns into circumstance.
+_OBJECT_END = re.compile(
+    r"\b(?:using|with|for|to|that|which|in|on|at|by|from|and|so|through|via|"
+    r"achieving|resulting|reducing|increasing|improving)\b|[,;:.()]",
+    re.IGNORECASE,
+)
+_ARTICLE = re.compile(r"^(?:an?|the|my|our|its|their)\s+", re.IGNORECASE)
+
+
+def subject_of(text: str, fallback: str) -> str:
+    """What this bullet is ABOUT, in words taken from the bullet itself.
+
+    ── The bug this exists to fix ──────────────────────────────────────────────
+
+    The subject used to be `concept_labels[0]`, falling back to a family noun
+    when nothing resolved. On a resume where the ontology maps little — which
+    is every resume while M04 is down, and most of them while it is up — every
+    risky claim got the same fallback, and so the same three questions,
+    verbatim. Six risky bullets produced eighteen near-identical lines, and the
+    one card that HAD a concept ("How did you implement Routing?") proved the
+    template was fine and the noun was not.
+
+    Generated output that repeats itself reads as generated. §2.3's whole
+    argument is that a question has to look like it came from what the student
+    wrote, so the fallback is now taken from the sentence rather than from a
+    constant — the project's name if the bullet names one, otherwise what the
+    verb acts on.
+
+    Still deterministic, still explainable, and still wrong sometimes: a
+    subject read off the wrong noun asks an odd question, which is a far
+    cheaper failure than asking the same question six times.
+    """
+    for match in _PROPER_RUN.finditer(text):
+        run = match.group(0)
+        if run.split()[0].casefold() in _ALL_VERBS:
+            continue
+        # An all-caps heading fragment is a layout artefact, not a name.
+        if run.isupper() and len(run) > 24:
+            continue
+        return run
+
+    low = text.casefold()
+    for _claim_type, verbs in _CLAIM_VERBS:
+        for verb in verbs:
+            match = re.search(rf"\b{re.escape(verb)}\b", low)
+            if match is None:
+                continue
+            tail = text[match.end() :].strip()
+            stop = _OBJECT_END.search(tail)
+            phrase = (tail[: stop.start()] if stop else tail).strip()
+            phrase = _ARTICLE.sub("", phrase).strip(" -–—")
+            words = phrase.split()
+            if not words or len(words) > 4 or not any(w[0].isalpha() for w in words):
+                continue
+            # "route planner" needs the article back to sit inside "how did you
+            # implement ___?"; "Crop Disease Detection" does not.
+            return phrase if phrase[0].isupper() else f"the {phrase}"
+
+    return fallback
+
+
 def probes_for(claim: ResumeClaim, *, concept_labels: list[str]) -> list[ClaimProbe]:
     """One to three questions, at escalating depth (FR-1.10).
 
@@ -848,7 +919,10 @@ def probes_for(claim: ResumeClaim, *, concept_labels: list[str]) -> list[ClaimPr
     strong, specific bullet wastes the first question of an interview.
     """
     family = _PROBE_FAMILIES[_FAMILY_FOR.get(claim.claim_type, "engineering")]
-    subject = concept_labels[0] if concept_labels else family.fallback
+    # A resolved concept still wins — it is the thing downstream can test — but
+    # the fallback is now the bullet's own subject rather than a constant, so
+    # two claims that map to nothing no longer get the same three questions.
+    subject = concept_labels[0] if concept_labels else subject_of(claim.text, family.fallback)
     number = claim.quantifiers[0] if claim.quantifiers else None
     out: list[ClaimProbe] = []
 

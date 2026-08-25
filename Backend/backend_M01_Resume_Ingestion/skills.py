@@ -151,6 +151,37 @@ def guard_short_token(label: str) -> bool:
     return len(normalise_alias(label).replace(" ", "")) > config.SHORT_TOKEN_MAX_CHARS
 
 
+def mention_pattern(label: str) -> re.Pattern[str]:
+    """Where this label is written, allowing for the line breaks the page has.
+
+    `extract.py` rejoins a word the layout split across two lines, so the label
+    reaching this function can be "Multi-modal Learning" while the DOCUMENT
+    still reads "Multi-\\nmodal Learning". A literal search then finds nothing,
+    the skill lands in the read-back with no span and no context, and the one
+    thing this module promises about every fact — that it points at the words
+    it came from — quietly stops being true for exactly the skills that needed
+    repairing.
+
+    So a space in the label matches any run of whitespace, and an internal
+    hyphen may be followed by one. Both are places a page breaks; neither
+    changes which word is being matched.
+    """
+    body = r"\s+".join(re.escape(token) for token in label.split())
+    # `re.escape` renders a hyphen as `\-`; a page may break directly after it.
+    body = body.replace(r"\-", r"-\s*")
+    return re.compile(r"\b" + body + r"\b", re.IGNORECASE)
+
+
+def _surface_of(matched: str) -> str:
+    """What to show the student for a match that spans a line break.
+
+    The span keeps the verbatim slice — it has to, it is an offset range into
+    the artifact. This is the display copy, with the break closed up, so the
+    chip reads "Multi-modal Learning" rather than "Multi- modal Learning".
+    """
+    return re.sub(r"\s+", " ", re.sub(r"-\s+", "-", matched)).strip()
+
+
 def find_mentions(
     text: str,
     labels: list[str],
@@ -183,7 +214,7 @@ def find_mentions(
             # confirmed the concept exists, and not `llm`, because no model ran.
             method, confidence = "offline_alias", config.MAPPING_CONFIDENCE["offline_alias"]
 
-        for match in re.finditer(rf"\b{re.escape(label)}\b", text, re.IGNORECASE):
+        for match in mention_pattern(label).finditer(text):
             context = context_for(match.start(), sections)
             key = (concept_id or normalise_alias(label), context)
             existing = by_key.get(key)
@@ -191,7 +222,7 @@ def find_mentions(
                 existing.occurrences += 1
                 continue
             by_key[key] = SkillMention(
-                surface=match.group(0),
+                surface=_surface_of(match.group(0)),
                 concept_id=concept_id,
                 mapping_method=method,
                 mapping_confidence=confidence,
