@@ -308,6 +308,56 @@ each is listed here so it is not mistaken for an oversight.
 | `mapping_method="alias_fuzzy"` (§6.4 step 3) | `rapidfuzz` + the 2,000-entry alias table |
 | Async parse worker + `202 Accepted` | only worth it when a stage gets slow |
 
+### 8b. ⬜ M01 probes vs M05 grounded items — the two specs disagree
+
+Raised 2026-08-25. **Not a bug today; a guaranteed duplication the day M05 lands.**
+
+Both modules generate a question from an M01 claim, and neither spec says which
+one is supposed to:
+
+| | says |
+|---|---|
+| M05 §5 `GroundedSource` | `kind="resume_claim"`, `source_id` = **an M1 claim id**, `source_module="M01"` — M05 takes the CLAIM and generates its own item |
+| M05 §6.8 step 3 | *"Generate a grounded item on the fly (repo/resume)"* — M05 generating |
+| M05 §6.2 | grounding priority puts `resume claim (M1)` second; the prompt gets *"the source artifact"* |
+| **M01 `module.json` feeds** | M05 takes *"claim-grounded **probes**, the resume-specific question source"* — M05 consuming what M01 already wrote |
+
+The first three describe M05 regenerating from the claim. The fourth describes
+M05 reusing M01's probes. Both cannot be the design.
+
+**Why M01 generating them is still right.** FR-1.10 is P0 and §6.7 is M01's own
+stage, and the probes have two consumers that are not M05:
+
+- §2.3 Screen 4, the Claim Map — *"An interviewer will ask:"*. This is the
+  payoff screen and the thing students screenshot. It cannot wait on a module
+  that does not exist, and Rule 2 forbids it going blank when M05 is down.
+- M13, via `expects` — §6.7: *"the key points a good answer covers, which
+  becomes the rubric key-points when this question is used in a real round"*.
+
+**What is actually different between the two artifacts:**
+
+| | M01 probe | M05 grounded item |
+|---|---|---|
+| purpose | diagnosis, shown to the student | instrument, asked in a round |
+| shape | question + `expects` + rationale | full package incl. reference answer |
+| gates | none (nothing is scored on it) | G1/G4/G5 inline, all five for bank items |
+| calibration | none | `theta_eligible=False`, consent_id, `grounded_for_candidate` |
+| lifetime | stored with the resume | ephemeral, deleted with the candidate |
+
+So the artifacts are genuinely different. **The generation CALL is not** — same
+source, same model, near-identical output, and the day M05 ships there will be
+two of them.
+
+**Recommended resolution — M05 wraps rather than regenerates.** M01's probe
+becomes M05's candidate stem; M05 adds the package, the gates, the consent
+binding and `theta_eligible=False`. That is `module.json`'s version, it makes
+one generation instead of two, and it means the student is asked in the round
+exactly what the Claim Map warned them they would be asked — which is the whole
+emotional arc §2.2 is built on.
+
+Needs M05's owner to agree, and M05 §5's `GroundedSource` to change from
+"an M1 claim id" to an M1 probe id, or to carry both.
+
 ## 9. Decisions (§15)
 
 **Settled, and the code holds to them.** Both are the kind of decision that
