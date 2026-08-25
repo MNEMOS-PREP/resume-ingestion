@@ -17,6 +17,51 @@ Legend: ✅ done · 🟡 partly done · ⬜ not started
 
 ---
 
+## 0. Do these next — two ideas worth stealing
+
+From reading [firecrawl/pdf-inspector](https://github.com/firecrawl/pdf-inspector)
+(Rust, MIT). Its extraction engine is **not** worth adopting — M01 already does
+columns, typography, tables and OCR routing, its headline output is Markdown
+where our whole contract is character offsets, and a native binding is a demo
+that does not start on a marker's laptop. Two of its ideas are worth taking.
+
+### ⬜ Encoding-corruption detection — a real gap, confirmed
+
+```
+138 chars, clears the 100-char OCR threshold
+language: unknown
+notes: NONE — accepted silently
+```
+
+That is private-use-area mojibake, the classic broken-`ToUnicode` signature.
+M01 accepts it, produces a confidently empty parse, and tells the student
+nothing. The garbled-Latin variant is worse in a different way — it gets
+flagged, but as **German**, which is a wrong explanation rather than no
+explanation.
+
+This is exactly the silent-wrong-answer class the module is written against,
+and we do not catch it. A PDF whose font map is broken extracts something that
+has the LENGTH of text and none of the meaning, so every check downstream —
+the OCR threshold, the language guess, the section lexicon — is being asked
+about characters that are not letters.
+
+Detect on: private-use-area codepoints, no vowels, absent word structure, a
+character distribution nothing like prose. Route it to OCR, which is the one
+thing that can actually read such a page, and say so.
+
+### ⬜ Per-page OCR routing
+
+`parse_pdf` OCRs the WHOLE document when the text layer is thin. A resume with
+one scanned page gets everything OCR'd — slower, and
+`OCR_CONFIDENCE_PENALTY` lands on pages that did not need it, so a perfectly
+readable page 1 is reported as less certain than it is.
+
+Route per page instead: classify each page's text layer, OCR only the ones that
+need it, and apply the penalty only to those. Roughly twenty lines in
+`parse_pdf`.
+
+---
+
 ## 1. Where the module stands
 
 | | |
@@ -139,6 +184,50 @@ five were invisible from inside the module.
 - **`.NET` lost its leading dot.** The golden metric could not see it —
   `normalise_alias` folds the dot away — but the student would have.
 
+## 4c. The frontend caught up with the backend (2026-08-25)
+
+Ten of thirty-one routes had **no client at all**, and four hooks that existed
+were mounted by no screen. Neither half could see it: the backend suite passed,
+the frontend built, and the feature did not exist.
+
+- ✅ **Every route has a client; every hook has a screen.**
+      `tests/test_contract.py` reads both halves and fails `-m gate` on either.
+      It carries an explicit two-entry allowlist for the server's own aliases
+      (`/resumes/ingest`, `/diff/{other}`), and a third test stops that
+      allowlist becoming a parking space.
+- ✅ **Three new screens** — `…/audit` (correction log + event stream),
+      `…/privacy` (contact release, share grants, disclosure, retention,
+      deletion), `/quality` (AC-1.7 against §13's line).
+- ✅ **Dates are editable** (FR-1.11). §2.3 asks for "sections, bullets, skills,
+      and dates"; three of the four had been editable since the confirmation
+      pass was built. A mis-read date drives the gap flag the student is then
+      told to prepare an answer for.
+- ✅ **A claim can be struck** (EC-1.17). The QA script had assumed this button
+      for months. The endpoint was there; the button was not.
+- ✅ **`claim_type` is correctable.** The last correctable field with no control,
+      and the one that decides which probe family a bullet gets.
+- ✅ **Red flags and skills read from their own endpoints.** Both screens were
+      re-deriving from the raw resume, so the server's severity ordering was
+      discarded and the most serious flag could render third.
+
+### Three defects found by looking at the rendered page
+
+The pattern from §4b again — none of these was visible from inside a test.
+
+- **`Multi-modal Learning` came out as three skills.** The PDF wrapped it at its
+  own hyphen and the line break split it into `NLP`, `Multi-` and
+  `modal Learning`. `extract.py` now rejoins a hyphen-wrapped word, keeping the
+  hyphen; `skills.py` searches break-tolerantly so the repaired label still
+  resolves its span in the unrepaired document.
+- **Every risky claim got identical probes.** The subject fell back to the
+  constant `"this project"` whenever nothing resolved, so six risky bullets
+  produced eighteen near-identical lines. `claims.subject_of` now reads it off
+  the sentence. The ladder was never the problem; the noun was.
+- **Two skill sections that read as one.** "Mapped to nothing" and "never used
+  in a bullet" are genuinely different questions that overlap almost completely
+  on a real resume. They are two independent properties of one skill, so they
+  are now two tags on one row.
+
 ## 5. Tests (§12, §13)
 
 - ✅ **AC-1.2 [GATE]** — the product is usable end to end with no resume
@@ -218,16 +307,22 @@ comment at the site.
 
 **Still open — each needs someone outside this repo:**
 
-- 🟡 Raw PDF retention period. **Mechanism built, decision open.**
+- 🟡 Raw PDF retention period. **Mechanism built and now visible, decision open.**
       `retention.py` carries the period, the rationale, and `decided: false`;
       `GET /v1/resumes/{id}/disclosure` reports when an artifact expires and
-      that expiry is a tombstone rather than a silent delete. The ethics
-      committee still has to choose the number (§48).
+      that expiry is a tombstone rather than a silent delete. Since 2026-08-25
+      the `…/privacy` screen renders all of it, including the pending sign-off —
+      a student asking "how long do you keep my resume?" gets an answer that is
+      not "read the source". The ethics committee still has to choose the
+      number (§48).
 - 🟡 Whether a placement officer can see an individual student's risky claims.
-      **Mechanism built, decision open.**
+      **Mechanism built and now operable, decision open.**
       `ShareGrant` — a grant is to somebody named, it expires, and revoking
       leaves a trace. It fails closed: a viewer with no grant gets
-      `aggregate_only`. The cell still has to confirm that is the policy.
+      `aggregate_only`. The `…/privacy` screen can now grant, revoke, and show
+      what a named viewer would see; it says plainly that with no auth on the
+      platform this answers the question rather than enforcing it. The cell
+      still has to confirm that is the policy.
 - ⬜ Who reviews the unmapped-skill queue, and how often. Proposal: E3,
       weekly, fifteen minutes. The queue is built and served at
       `GET /v1/resumes/{id}/skills`; only the process is undecided.

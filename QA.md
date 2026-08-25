@@ -60,9 +60,28 @@ Take a bullet in **risky**. Add a measurement to it.
 
 ### 5 · Delete every claim → the product still works  (1 min)
 
-- [ ] Claims can be deleted one at a time
+In the confirmation editor, use **not mine** on each bullet in turn.
+
+- [ ] Claims can be deleted one at a time, and each asks before it goes
 - [ ] With none left, the Claim Map is an empty state and not an error
 - [ ] "Looks right — continue" still works
+- [ ] Each removal appears on **How this was read** as a correction
+
+> This step described a control that did not exist for a while. The endpoint
+> was there, the QA script assumed a button, and the button was never built —
+> which is exactly the gap `pytest -m gate` now catches from the other side.
+
+### 5b · Fix a date the parser invented  (1 min)
+
+Find a date range under **Dates** that is not a date — a graph size, a version
+number, anything the reader grabbed.
+
+- [ ] **not a date** removes it, and the timeline flag that depended on it goes
+- [ ] Typing a real range ("Jun 2025 - Aug 2025") saves and re-reads it
+- [ ] Typing nonsense says *I could not read that as a date range* and changes
+      nothing — not a silent failure, and not a stored string
+- [ ] Reclassifying a bullet ("I built it" over "I used it") changes the
+      questions it invites
 
 ### 6 · Skip → a real destination  (1 min)
 
@@ -83,6 +102,30 @@ Upload a revised copy of a resume already stored for this candidate.
 - [ ] A bullet rewritten to add a number appears under **Rewritten** and says
       the rewrite helped
 - [ ] Uploading the identical file says so rather than showing an empty diff
+
+### 7b · Who can see this  (1 min)
+
+From the claim map, open **Who can see this**.
+
+- [ ] **Show contact details** is a button, not a field that was already filled
+      in — and the panel says the request is recorded
+- [ ] Granting `placement-cell` and then asking what `placement-cell` sees
+      moves the answer from *counts only* to *your individual claims*
+- [ ] Withdrawing moves it back, and says so
+- [ ] The retention date is a real date, and the pending sign-off is visible
+      rather than implied
+- [ ] Deleting says what survives deletion **before** the button, not after
+
+### 7c · Parser quality  (1 min)
+
+- [ ] `/quality` renders without a resume selected
+- [ ] The edit rate is drawn against §13's line and the verdict is a word, not
+      only a colour
+- [ ] Unset PII key and absent virus scan read as known gaps, not as errors
+
+> Both of these were endpoints with no screen. If either page is blank, check
+> `pytest -m gate` — the contract test fails on a route with no client, so a
+> blank page here means the wiring was removed rather than never added.
 
 ### 8 · Keyboard only  (2 min)
 
@@ -123,5 +166,5 @@ Read the Claim Map as a nervous final-year student, not as its author.
 - [ ] `pytest` green · `pytest -m gate` green
 - [ ] `research/score_golden.py` meets all three targets
 - [ ] `ruff check Backend/` clean · `npm run build` clean
-- [ ] `GET /v1/quality` — edit rate under 40% (AC-1.7), and look at
-      `failures_by_code` for upload types failing in the wild
+- [ ] `/quality` — edit rate under 40% (AC-1.7), and look at what is failing in
+      the wild. It is a page now; it used to be a curl nobody ran

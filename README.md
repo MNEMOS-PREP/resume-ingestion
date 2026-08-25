@@ -37,20 +37,37 @@ upload → intake → layout → segment → entities → claims
 | `POST /v1/resumes` | PDF or DOCX upload, by magic bytes rather than extension |
 | `POST /v1/resumes/from-text` | The always-works fallback. No PDF library, no OCR |
 | `GET /v1/resumes/{id}` | The parse: sections, claims, probes, flags, entities |
+| `GET /v1/resumes/candidate/{cid}` | Every resume stored for one candidate, newest first |
 | `GET /v1/resumes/{id}/stream` | Stage-by-stage progress (SSE) for the reading screen |
 | `GET /v1/resumes/{id}/claims?band=` | The Claim Map, ordered, with "fix this first" picked |
 | `GET /v1/resumes/{id}/red-flags` | Gaps, chronology, inflation, duplicates — worst first |
 | `GET /v1/resumes/{id}/skills` | Skill mentions with context, plus the unmapped queue |
 | `PATCH /v1/resumes/{id}/sections/{sid}` | Relabel a section the parser got wrong |
 | `PATCH /v1/resumes/{id}/claims/{cid}` | Edit a bullet; re-scores just that claim |
+| `PATCH /v1/resumes/{id}/dates/{i}` | Correct or strike a date range. Empty value removes it |
+| `DELETE /v1/resumes/{id}/claims/{cid}` | *"That isn't mine."* Logged as a correction, not a delete |
 | `POST /v1/resumes/{id}/skills` | Add or strike a skill |
-| `POST /v1/resumes/{id}/confirm` | Commit the confirmation pass |
+| `POST /v1/resumes/{id}/corrections` | Any correction, in the audit shape. Covers `claim_type` |
+| `GET /v1/resumes/{id}/corrections` | Every time the parser was overruled here |
+| `POST /v1/resumes/{id}/confirm` | Commit the confirmation pass. Idempotent |
 | `POST /v1/resumes/{id}/claims/{cid}/rewrite` | A STAR shape to fill in. Suggestion only |
 | `GET /v1/resumes/{id}/diff?against=` | What changed between two uploads |
 | `DELETE /v1/resumes/{id}` | Hard delete, including the stored artifact |
 | `GET /v1/resumes/{id}/contact` | The contact block, released deliberately |
+| `POST /v1/resumes/{id}/share` | Grant somebody named sight of the claims. Expires |
+| `DELETE /v1/resumes/{id}/share/{who}` | Withdraw it. Recorded, not deleted |
+| `GET /v1/resumes/{id}/disclosure?viewer=` | What that viewer may see, and the retention in force |
+| `GET /v1/resumes/{id}/events` | The `resume.*` stage boundaries recorded here |
+| `GET /v1/quality` | AC-1.7: edit rate, what gets corrected, what is failing |
 | `GET /v1/capabilities` | What this deployment can actually read |
 | `GET /v1/deps` · `GET /health` · `GET /status` | |
+
+Two more exist and are the server's own second spelling of a route above:
+`POST /v1/resumes/ingest` (= `/from-text`) and `GET /v1/resumes/{id}/diff/{other}`
+(= `/diff?against=`). Both are kept because a caller already used the older form
+and a 307 through a POST loses the body in enough HTTP clients to be worth two
+lines instead. They are the only two endpoints without their own frontend hook,
+and `tests/test_contract.py` is what keeps that list from growing.
 
 **All 20 of the spec's functional requirements are met**, and the §13 gates are
 tests rather than a document (`pytest -m gate`). What is left is one data task —
@@ -174,14 +191,25 @@ does not exist yet.
 
 ## The frontend
 
-Four screens on `:5201`, following the spec's arc:
+Eight screens on `:5201`. The first four are the spec's arc; the rest exist
+because a fact with no surface is a fact nobody can check.
 
-| Screen | What it is for |
-|---|---|
-| **Dropzone** | File or paste, and **Skip is a first-class button** — FR-1.14 is a P0 |
-| **Reading** | Narrated stages off the SSE feed. A spinner for 25 seconds feels broken |
-| **Confirmation** | *"Here's what I read. Fix anything I got wrong."* Editable throughout |
-| **Claim Map** | The payoff. Bands, the questions each claim invites, one thing to fix first |
+| Screen | Route | What it is for |
+|---|---|---|
+| **Dropzone** | `/` | File or paste, and **Skip is a first-class button** — FR-1.14 is a P0 |
+| **Reading** | `/` | Narrated stages off the SSE feed. A spinner for 25 seconds feels broken |
+| **Confirmation** | `/resumes/:id` | *"Here's what I read. Fix anything I got wrong."* Sections, bullets, skills **and dates** |
+| **Claim Map** | `/resumes/:id` | The payoff. Bands, the questions each claim invites, one thing to fix first |
+| **Diff** | `…/diff` | What moved since the last upload. Re-banded bullets first |
+| **Audit** | `…/audit` | The correction log and the event stream, both append-only |
+| **Privacy** | `…/privacy` | Contact release, share grants, disclosure, retention, deletion |
+| **Parser quality** | `/quality` | AC-1.7's edit rate against §13's line, and the gaps we have not closed |
+
+The last three were endpoints before they were screens. The correction log, the
+event stream, the retention policy and the share gate were all built, all
+tested, and all unreachable outside the database — which is the worst state to
+be in, because the tests pass and the feature does not exist. `pytest -m gate`
+now fails if a route has no client or a hook has no screen.
 
 **The confirmation pass is the important one.** Parsing accuracy on real Indian
 campus resumes — two-column templates, tables, Canva exports — will never hit
@@ -227,11 +255,14 @@ Backend/
     dates.py                    one definition of an Indian resume date range
     golden.py                   scoring the golden set
     models.py                   the tables, and what may leave them
-    tests/                      170 tests, no socket opened
+    retention.py                §15 decisions 3 and 4, as mechanism
+    crypto.py                   the contact block, encrypted at rest
+    tests/                      242 tests, no socket opened
+    tests/test_contract.py      every route has a client; every hook has a screen
 Frontend/frontend_M01_Resume_Ingestion/src/
     api.ts                      one hook per endpoint, and none without one
     types.ts                    only fields the API actually sends
-    components/                 the four screens, plus bands and highlighting
+    components/                 the eight screens, plus bands and highlighting
     ui/                         shell, primitives, design tokens
 research/                       measurement, not product
   data/golden/resumes/          20 annotated resumes, five sets

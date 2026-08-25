@@ -7,6 +7,16 @@
  * endpoint that does not answer lets a screen be built against it, and the
  * caller finds out in the browser rather than in a review.
  *
+ * ── The two endpoints deliberately without their own hook ───────────────────
+ *
+ * `POST /v1/resumes/ingest` and `GET /v1/resumes/{id}/diff/{other}` are the
+ * server's own aliases for `/resumes/from-text` and `/diff?against=`. Both
+ * exist because a caller already used the older spelling; both run the same
+ * function on the same line. A second hook would let two screens drift onto
+ * two spellings of one operation and disagree about which is current, so the
+ * rule above is read as one hook per OPERATION — and the alias is named here
+ * rather than left for the next person to rediscover in `router.py`.
+ *
  * ── Two verbs `@ai/core` does not carry ─────────────────────────────────────
  *
  * `api` in core has get/post/del and a JSON content type. The confirmation
@@ -23,17 +33,25 @@ import { api } from "@ai/core";
 import type {
   Capabilities,
   ClaimListing,
+  Correction,
   CorrectionIn,
   Deps,
+  DisclosureReport,
   Health,
   IntakeErrorDetail,
   ModuleStatus,
   ProgressEvent,
+  QualityReport,
   RedFlagListing,
   Resume,
+  ResumeContact,
   ResumeDiff,
+  ResumeEventRow,
   ResumeIngestIn,
+  RevokeResult,
   RewriteSuggestion,
+  ShareGrant,
+  ShareIn,
   SkillListing,
 } from "./types";
 
@@ -123,12 +141,17 @@ export const m01Keys = {
   status: ["m01", "status"] as const,
   deps: ["m01", "deps"] as const,
   capabilities: ["m01", "capabilities"] as const,
+  quality: ["m01", "quality"] as const,
   resume: (id: string) => ["m01", "resume", id] as const,
   claims: (id: string, band?: string) => ["m01", "claims", id, band ?? "all"] as const,
   redFlags: (id: string) => ["m01", "red-flags", id] as const,
   skills: (id: string) => ["m01", "skills", id] as const,
   byCandidate: (candidateId: string) => ["m01", "resumes", candidateId] as const,
   diff: (a: string, b: string) => ["m01", "diff", a, b] as const,
+  contact: (id: string) => ["m01", "contact", id] as const,
+  corrections: (id: string) => ["m01", "corrections", id] as const,
+  events: (id: string) => ["m01", "events", id] as const,
+  disclosure: (id: string, viewer: string) => ["m01", "disclosure", id, viewer] as const,
 };
 
 /** Everything derived from one resume, invalidated together after a write. */
@@ -138,6 +161,13 @@ function invalidateResume(qc: ReturnType<typeof useQueryClient>, resume: Resume)
   qc.invalidateQueries({ queryKey: m01Keys.redFlags(resume.id) });
   qc.invalidateQueries({ queryKey: m01Keys.skills(resume.id) });
   qc.invalidateQueries({ queryKey: m01Keys.byCandidate(resume.candidate_id) });
+  // Every write above goes through the correction log and emits an event, so
+  // the two audit views are stale the moment any of them lands. They were left
+  // out of this list once and the log looked like it had stopped recording.
+  qc.invalidateQueries({ queryKey: m01Keys.corrections(resume.id) });
+  qc.invalidateQueries({ queryKey: m01Keys.events(resume.id) });
+  // AC-1.7's edit rate is computed from those corrections.
+  qc.invalidateQueries({ queryKey: m01Keys.quality });
 }
 
 /* ------------------------------------------------------------------ */
@@ -180,6 +210,23 @@ export function useCapabilities() {
     queryKey: m01Keys.capabilities,
     queryFn: () => meta<Capabilities>("/v1/capabilities"),
     staleTime: Infinity,
+    retry: false,
+  });
+}
+
+/**
+ * AC-1.7, answerable (§13, `GET /v1/quality`).
+ *
+ * *"Confirmation screen edit rate; tracked; > 40% means the parser needs
+ * work."*  It was tracked and nothing added it up, so the criterion was a
+ * column rather than a number anybody could look at. `meta` rather than `api`
+ * because `quality` is not a noun any module owns, so the shell has no route
+ * for it and only the `/sys/m01` fallback reaches here.
+ */
+export function useQuality() {
+  return useQuery({
+    queryKey: m01Keys.quality,
+    queryFn: () => meta<QualityReport>("/v1/quality"),
     retry: false,
   });
 }
@@ -272,6 +319,72 @@ export function useDiff(newer: string | undefined, older: string | undefined) {
   });
 }
 
+/**
+ * The contact block (FR-1.17). Never fetched because a screen rendered.
+ *
+ * `enabled` is the point of this signature. Every other field on a resume
+ * arrives whether anyone looked at it or not; this one is the single request
+ * that deliberately releases the student's email and phone number, and the
+ * server gives it its own route and its own audit tag precisely so "who saw
+ * it" is answerable. A hook that fired on mount would make that log say
+ * "everyone who opened the page", which is the same as saying nothing.
+ *
+ * So the caller passes `reveal` and it starts false. See `ContactPanel`.
+ */
+export function useResumeContact(resumeId: string | undefined, reveal: boolean) {
+  return useQuery({
+    queryKey: m01Keys.contact(resumeId ?? ""),
+    enabled: Boolean(resumeId) && reveal,
+    retry: false,
+    // Not cached across the session: the next reveal should be a new access,
+    // recorded as one, rather than served silently from memory.
+    staleTime: 0,
+    gcTime: 0,
+    queryFn: () => api.get<ResumeContact>(`/v1/resumes/${resumeId}/contact`),
+  });
+}
+
+/** Every time the parser was overruled on this resume (FR-1.12). */
+export function useCorrections(resumeId: string | undefined) {
+  return useQuery({
+    queryKey: m01Keys.corrections(resumeId ?? ""),
+    enabled: Boolean(resumeId),
+    queryFn: () => api.get<Correction[]>(`/v1/resumes/${resumeId}/corrections`),
+  });
+}
+
+/**
+ * The `resume.*` stage boundaries recorded for this resume (FR-1.20).
+ *
+ * Readable over HTTP for the reason the endpoint exists: an event stream
+ * nobody can look at is one that quietly stops being emitted.
+ */
+export function useResumeEvents(resumeId: string | undefined) {
+  return useQuery({
+    queryKey: m01Keys.events(resumeId ?? ""),
+    enabled: Boolean(resumeId),
+    queryFn: () => api.get<ResumeEventRow[]>(`/v1/resumes/${resumeId}/events`),
+  });
+}
+
+/**
+ * What a given viewer may see, and until when (§15 decisions 3 and 4).
+ *
+ * Fails closed on the server: a viewer with no grant gets `aggregate_only`.
+ * There is no auth in this platform yet, so this ANSWERS the question rather
+ * than enforcing it — which is why the screen that renders it says so.
+ */
+export function useDisclosure(resumeId: string | undefined, viewer: string) {
+  return useQuery({
+    queryKey: m01Keys.disclosure(resumeId ?? "", viewer),
+    enabled: Boolean(resumeId && viewer),
+    queryFn: () =>
+      api.get<DisclosureReport>(
+        `/v1/resumes/${resumeId}/disclosure?viewer=${encodeURIComponent(viewer)}`,
+      ),
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /*  The confirmation pass (FR-1.11, FR-1.12)                          */
 /* ------------------------------------------------------------------ */
@@ -293,6 +406,42 @@ export function useEditClaim(resumeId: string) {
   return useMutation({
     mutationFn: ({ claimId, field, value }: { claimId: string; field: string; value: string }) =>
       patch<Resume>(`/v1/resumes/${resumeId}/claims/${claimId}`, { field, value }),
+    onSuccess: (resume) => invalidateResume(qc, resume),
+  });
+}
+
+/**
+ * §2.3 Screen 3's fourth editable target: *"sections, bullets, skills, and
+ * dates"* (FR-1.11).
+ *
+ * Dates were the one thing a student could not fix, and a mis-read date drives
+ * both the timeline-gap flag and `recency` — so the flag they are being told to
+ * prepare an answer for could be about a range the parser invented. An empty
+ * value strikes such a range; the server refuses a value it cannot read as a
+ * date rather than storing a string nothing can compare.
+ */
+export function useEditDate(resumeId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ index, value }: { index: number; value: string | null }) =>
+      patch<Resume>(`/v1/resumes/${resumeId}/dates/${index}`, { value }),
+    onSuccess: (resume) => invalidateResume(qc, resume),
+  });
+}
+
+/**
+ * Remove a claim the student says is not theirs (EC-1.17).
+ *
+ * *"User deletes every claim in the editor — allowed; product continues
+ * resume-free."*  The server routes this through the correction log rather
+ * than as a bare delete, because a student striking a claim we invented is the
+ * most informative correction there is and AC-1.7 should count it.
+ */
+export function useDeleteClaim(resumeId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (claimId: string) =>
+      api.del<Resume>(`/v1/resumes/${resumeId}/claims/${claimId}`),
     onSuccess: (resume) => invalidateResume(qc, resume),
   });
 }
@@ -348,6 +497,37 @@ export function useDeleteResume() {
   return useMutation({
     mutationFn: (resumeId: string) => api.del<void>(`/v1/resumes/${resumeId}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["m01"] }),
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/*  Sharing (§15 decision 4)                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The student decides who sees this.
+ *
+ * The policy is not decided — the placement cell has not been asked. What is
+ * decided is the shape: a grant is to somebody named, it expires, and revoking
+ * leaves a trace. Whichever way the decision lands it lands as configuration
+ * on top of this, so the screen can exist before the answer does.
+ */
+export function useShareResume(resumeId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ShareIn) => api.post<ShareGrant>(`/v1/resumes/${resumeId}/share`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["m01", "disclosure", resumeId] }),
+  });
+}
+
+/** Withdraw a grant. Recorded, not deleted — a student who shared and then
+ *  withdrew has a right to know it was withdrawn. */
+export function useRevokeShare(resumeId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (grantee: string) =>
+      api.del<RevokeResult>(`/v1/resumes/${resumeId}/share/${encodeURIComponent(grantee)}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["m01", "disclosure", resumeId] }),
   });
 }
 

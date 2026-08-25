@@ -18,7 +18,8 @@
 
 import { useState } from "react";
 
-import { Panel, Section } from "../ui/primitives";
+import { useRedFlags } from "../api";
+import { Panel, Section, SkeletonRows } from "../ui/primitives";
 import type { RedFlag, RedFlagKind } from "../types";
 
 const KIND_LABEL: Record<RedFlagKind, string> = {
@@ -98,4 +99,27 @@ export function RedFlagBanner({ flags }: { flags: RedFlag[] }) {
       )}
     </Section>
   );
+}
+
+/**
+ * The same banner, ordered by the server.
+ *
+ * `GET /v1/resumes/{id}/red-flags` sorts serious before notable before info
+ * and returns the counts alongside. The screen used to read `resume.red_flags`
+ * straight off the row instead, which is the same set in PARSE order — so the
+ * one flag the student most needed to prepare for could sit third, under two
+ * pieces of trivia, purely because of where on the page it was found.
+ *
+ * The prop-taking `RedFlagBanner` above stays exported: M06 renders the same
+ * flags from a resume it already holds, and a second copy of this component is
+ * how the "every flag comes with a way to answer it" rule stops being true in
+ * one of the two places.
+ */
+export function RedFlagPanel({ resumeId }: { resumeId: string }) {
+  const listing = useRedFlags(resumeId);
+
+  if (listing.isLoading) return <SkeletonRows rows={2} />;
+  if (!listing.data) return null;
+
+  return <RedFlagBanner flags={listing.data.red_flags} />;
 }

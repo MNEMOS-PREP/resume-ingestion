@@ -424,3 +424,151 @@ export interface CorrectionIn {
   field: string;
   value: string | null;
 }
+
+/* ------------------------------------------------------------------ */
+/*  Contact (FR-1.17)                                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * `GET /v1/resumes/{id}/contact` — the block that is redacted everywhere else.
+ *
+ * Its own route, its own tag on the server, and its own type here rather than
+ * fields on `Resume`: "who saw the student's phone number" has to be
+ * answerable from an access log, and that is only true while this is the one
+ * request that releases it. A screen that wants a name must ask for it on
+ * purpose.
+ */
+export interface ResumeContact {
+  resume_id: string;
+  candidate_id: string;
+  emails: string[];
+  phones: string[];
+  links: string[];
+  created_at: string;
+}
+
+/* ------------------------------------------------------------------ */
+/*  The correction log (FR-1.12, AC-1.7)                              */
+/* ------------------------------------------------------------------ */
+
+/** One time the parser was overruled. Append-only — the disagreement is the
+ *  interesting part, and AC-1.7 counts them. */
+export interface Correction {
+  id: string;
+  resume_id: string;
+  candidate_id: string;
+  content_sha256: string;
+  target: "section" | "claim" | "skill" | "entity";
+  target_id: string;
+  field: string;
+  old_value: string | null;
+  new_value: string | null;
+  created_at: string;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Events (FR-1.20)                                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One `resume.*` stage boundary.
+ *
+ * `payload` is a whitelist on the server — counts, durations, ids and enum
+ * values, never resume text and never a contact detail. Typed as a record of
+ * numbers and strings for that reason: anything richer arriving here means the
+ * whitelist grew something it should not have.
+ */
+export interface ResumeEventRow {
+  id: string;
+  name: string;
+  resume_id: string | null;
+  candidate_id: string | null;
+  payload: Record<string, string | number | boolean>;
+  at: string;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Retention and disclosure (§15 decisions 3 and 4)                  */
+/* ------------------------------------------------------------------ */
+
+/** The policy in force, reported rather than assumed — "how long do you keep
+ *  my resume?" is a question a student is entitled to ask. */
+export interface RetentionPolicy {
+  retention_days: number;
+  rationale: string;
+  /** False while the ethics committee has not signed off. Shown, not hidden. */
+  decided: boolean;
+  deletable_on_request: boolean;
+  expiry_is_a_tombstone: boolean;
+  default_disclosure: DisclosureLevel;
+}
+
+export type DisclosureLevel = "aggregate_only" | "shared_by_student" | "self_access";
+
+/** `GET /v1/resumes/{id}/disclosure?viewer=` — fails closed. */
+export interface DisclosureReport {
+  resume_id: string;
+  viewer: string;
+  disclosure: DisclosureLevel;
+  may_see_individual_claims: boolean;
+  retention: RetentionPolicy & {
+    created_on: string;
+    expires_on: string;
+    expired: boolean;
+  };
+}
+
+/** A grant is to somebody named, it expires, and revoking leaves a trace. */
+export interface ShareGrant {
+  id: string;
+  resume_id: string;
+  candidate_id: string;
+  grantee: string;
+  granted_at: string;
+  expires_at: string | null;
+  revoked_at: string | null;
+}
+
+export interface ShareIn {
+  grantee: string;
+  /** Null keeps it open-ended. 90 days is the server's default. */
+  days: number | null;
+}
+
+export interface RevokeResult {
+  revoked: number;
+  grantee: string;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Parser quality (AC-1.7, §13)                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * `GET /v1/quality`.
+ *
+ * §13's own threshold, evaluated rather than left to the reader:
+ * `parser_needs_work` is the server's verdict on `edit_rate > 0.40`, so a
+ * screen cannot disagree with the release checklist about whether the bar was
+ * met.
+ */
+export interface QualityReport {
+  resumes: number;
+  confirmed: number;
+  edit_rate: number;
+  edit_rate_target: number;
+  parser_needs_work: boolean;
+  corrections: number;
+  corrections_by_target: Record<string, number>;
+  needs_review: number;
+  ocr_used: number;
+  two_column: number;
+  /** FR-1.17 — false means the key is not set and contact rows are in clear. */
+  pii_encrypted_at_rest: boolean;
+  /** §6.1 asks for one. There is not one, and the honest gap is reported. */
+  virus_scan: boolean;
+  object_store: "s3" | "local";
+  retention: RetentionPolicy;
+  failed: number;
+  failures_by_code: Record<string, number>;
+}

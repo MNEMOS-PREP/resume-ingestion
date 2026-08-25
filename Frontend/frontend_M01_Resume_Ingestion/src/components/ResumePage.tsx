@@ -25,8 +25,8 @@ import { Link, useParams } from "react-router-dom";
 import { useResume } from "../api";
 import { ClaimMap } from "./ClaimMap";
 import { ConfirmationEditor } from "./ConfirmationEditor";
-import { RedFlagBanner } from "./RedFlagBanner";
-import { ScanSourceNote, SkillSet } from "./SkillSet";
+import { RedFlagPanel } from "./RedFlagBanner";
+import { ScanSourceNote, SkillPanel } from "./SkillSet";
 import { RedactionNote, SourceHighlight } from "./SourceHighlight";
 import { Btn, Empty, Panel, Section, SkeletonRows } from "../ui/primitives";
 import type { ResumeClaim, SourceSpan } from "../types";
@@ -86,6 +86,16 @@ export function ResumePage() {
                 What changed since last time
               </Btn>
             </Link>
+            <Link to={`/resumes/${data.id}/audit`}>
+              <Btn type="button" variant="ghost" size="sm">
+                How this was read
+              </Btn>
+            </Link>
+            <Link to={`/resumes/${data.id}/privacy`}>
+              <Btn type="button" variant="ghost" size="sm">
+                Who can see this
+              </Btn>
+            </Link>
             <Btn type="button" variant="ghost" size="sm" onClick={() => setReviewing(true)}>
               Something&rsquo;s wrong — let me fix it
             </Btn>
@@ -98,8 +108,11 @@ export function ResumePage() {
           onEditClaim={() => setReviewing(true)}
         />
 
-        <RedFlagBanner flags={data.red_flags} />
-        <SkillSet resume={data} />
+        {/* Both read from their own endpoint rather than off the row: the
+            server owns the severity ordering and the claimed-use view, and a
+            screen that re-derives them is how two of them start disagreeing. */}
+        <RedFlagPanel resumeId={data.id} />
+        <SkillPanel resume={data} />
 
         <Section label="How this was read">
           <Panel tone="sunken" className="px-4 py-3">

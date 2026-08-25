@@ -20,6 +20,9 @@ import { Pill } from "./primitives";
 
 const NAV = [
   { to: "/", label: "Paste a resume" },
+  // AC-1.7 is a release gate, and a gate you have to curl for is one that gets
+  // checked by whoever remembers to.
+  { to: "/quality", label: "Parser quality" },
   { to: "/deps", label: "Dependencies" },
 ];
 

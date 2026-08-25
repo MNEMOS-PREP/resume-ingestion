@@ -24,9 +24,17 @@
 
 import { useState } from "react";
 
-import { useConfirmResume, useCorrectSection, useEditClaim, useEditSkill } from "../api";
+import {
+  useConfirmResume,
+  useCorrection,
+  useCorrectSection,
+  useDeleteClaim,
+  useEditClaim,
+  useEditSkill,
+} from "../api";
+import { DateEditor } from "./DateEditor";
 import { Btn, Panel, Section, TextField } from "../ui/primitives";
-import type { Resume, ResumeSection, SectionKind } from "../types";
+import type { ClaimType, Resume, ResumeClaim, ResumeSection, SectionKind } from "../types";
 
 const SECTION_KINDS: SectionKind[] = [
   "contact",
@@ -97,6 +105,10 @@ export function ConfirmationEditor({
 
       <BulletEditor resume={resume} />
       <SkillChipEditor resume={resume} />
+      {/* §2.3's fourth editable target. It was the one thing a student could
+          not fix, and it drives the gap flag they are then asked to prepare
+          an answer for. */}
+      <DateEditor resume={resume} />
 
       <div className="flex flex-wrap items-center gap-3 border-t border-line pt-5">
         <Btn
@@ -238,47 +250,154 @@ function SectionRow({ resume, section }: { resume: Resume; section: ResumeSectio
  * point. They watch a rewrite move a bullet out of "risky".
  */
 function BulletEditor({ resume }: { resume: Resume }) {
-  if (resume.claims.length === 0) return null;
+  if (resume.claims.length === 0) {
+    return (
+      <Section label="Bullets" meta="none left">
+        <Panel tone="sunken" className="px-4 py-3">
+          <p className="text-sm text-ink-soft">
+            No bullets. If you removed them all, that is allowed and nothing downstream is broken
+            by it &mdash; the rest of the product works without a resume at all.
+          </p>
+        </Panel>
+      </Section>
+    );
+  }
 
   return (
     <Section label="Bullets" meta={claimProgress(resume)}>
       <div className="space-y-2">
         {resume.claims.map((claim) => (
-          <BulletRow key={claim.id} resumeId={resume.id} claimId={claim.id} text={claim.text} />
+          <BulletRow key={claim.id} resumeId={resume.id} claim={claim} />
         ))}
       </div>
     </Section>
   );
 }
 
-function BulletRow({
-  resumeId,
-  claimId,
-  text,
-}: {
-  resumeId: string;
-  claimId: string;
-  text: string;
-}) {
-  const [draft, setDraft] = useState(text);
+/**
+ * What kind of assertion a bullet is (FR-1.12).
+ *
+ * The classifier reads this off the bullet's verb, and the verb is often not
+ * the one that matters: "Worked on the placement portal" classifies as `used`
+ * for a student who built it, and the probe family follows the type — so a
+ * mis-read verb asks someone who shipped a system what it let them do that
+ * they could not do before. It is a one-word correction with a visible
+ * consequence, and it was the one correctable field with no control.
+ */
+const CLAIM_TYPES: ClaimType[] = [
+  "built",
+  "improved",
+  "led",
+  "researched",
+  "achieved",
+  "used",
+  "learned",
+];
+
+const CLAIM_TYPE_LABEL: Record<ClaimType, string> = {
+  built: "I built it",
+  improved: "I improved it",
+  led: "I led it",
+  researched: "I researched it",
+  achieved: "I achieved it",
+  used: "I used it",
+  learned: "I learned it",
+};
+
+function BulletRow({ resumeId, claim }: { resumeId: string; claim: ResumeClaim }) {
+  const [draft, setDraft] = useState(claim.text);
   const [editing, setEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
   const edit = useEditClaim(resumeId);
+  const remove = useDeleteClaim(resumeId);
+  // The generic correction endpoint, for the one field with no dedicated
+  // route. It speaks the audit shape directly, which is what this needs.
+  const reclassify = useCorrection(resumeId);
 
   if (!editing) {
     return (
-      <Panel className="flex items-start justify-between gap-3 px-4 py-2.5">
-        <p className="text-sm text-ink">{text}</p>
-        <Btn
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            setDraft(text);
-            setEditing(true);
-          }}
-        >
-          edit
-        </Btn>
+      <Panel className="px-4 py-2.5">
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-sm text-ink">{claim.text}</p>
+          <div className="flex shrink-0 gap-1">
+            <Btn
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setDraft(claim.text);
+                setEditing(true);
+              }}
+            >
+              edit
+            </Btn>
+            {!confirmingDelete ? (
+              <Btn
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setConfirmingDelete(true)}
+              >
+                not mine
+              </Btn>
+            ) : (
+              <>
+                <Btn
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={remove.isPending}
+                  onClick={() => remove.mutate(claim.id)}
+                >
+                  {remove.isPending ? "Removing…" : "remove it"}
+                </Btn>
+                <Btn
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirmingDelete(false)}
+                >
+                  keep
+                </Btn>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-1.5">
+            <span className="sr-only">What kind of claim this is</span>
+            <select
+              value={claim.claim_type}
+              disabled={reclassify.isPending}
+              onChange={(event) =>
+                reclassify.mutate({
+                  target: "claim",
+                  target_id: claim.id,
+                  field: "claim_type",
+                  value: event.target.value,
+                })
+              }
+              className="rounded-md border border-line bg-surface px-1.5 py-0.5 text-xs text-ink outline-none focus:border-brand-line"
+            >
+              {CLAIM_TYPES.map((kind) => (
+                <option key={kind} value={kind}>
+                  {CLAIM_TYPE_LABEL[kind]}
+                </option>
+              ))}
+            </select>
+          </label>
+          {claim.user_edited && <span className="provenance text-confirmed">you edited this</span>}
+        </div>
+
+        {confirmingDelete && (
+          <p className="mt-1.5 text-xs text-ink-soft">
+            Removing a bullet takes it out of everything downstream &mdash; no interview will ask
+            you to defend it. It is recorded as a correction, because a claim we invented is the
+            most useful thing you can tell us about the parser.
+          </p>
+        )}
       </Panel>
     );
   }
@@ -296,10 +415,10 @@ function BulletRow({
           type="button"
           variant="primary"
           size="sm"
-          disabled={edit.isPending || !draft.trim() || draft === text}
+          disabled={edit.isPending || !draft.trim() || draft === claim.text}
           onClick={() =>
             edit.mutate(
-              { claimId, field: "text", value: draft },
+              { claimId: claim.id, field: "text", value: draft },
               { onSuccess: () => setEditing(false) },
             )
           }
