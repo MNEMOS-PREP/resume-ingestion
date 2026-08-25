@@ -74,6 +74,15 @@ class _FakeM04:
 
     def urlopen(self, req, timeout=None):
         url = req.full_url if hasattr(req, "full_url") else str(req)
+
+        # This fake is M04 and nothing else. It used to answer `/health` for
+        # ANY host, which was invisible while M04 was the only declared
+        # upstream — and the moment M06 was declared for the defend drill,
+        # every test saw a live M06 that has never been written. A fixture
+        # standing in for one module must not answer for another.
+        if not url.startswith("http://127.0.0.1:8104"):
+            raise urllib.error.URLError(f"no fake for {url} (test)")
+
         if url.endswith("/health"):
             # ai_core probes this, and `statuses(force=True)` re-probes rather
             # than trusting the seeded cache, so the fixture has to answer it.

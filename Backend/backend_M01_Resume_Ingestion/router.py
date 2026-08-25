@@ -35,6 +35,7 @@ what leaves this module, and a span is a thing that leaves this module.
 """
 
 import json
+import logging
 import math
 import re
 import time
@@ -99,6 +100,8 @@ from .revisions import ALLOWED as ALLOWED_CORRECTIONS
 from .revisions import apply_correction, diff_claims
 from .rewrite import RewriteSuggestion, suggest_grounded
 from .storage import put as store_artifact
+
+log = logging.getLogger("uvicorn.error")
 
 router = APIRouter(prefix="/v1", tags=["M01 Resume Ingestion"])
 
@@ -1218,6 +1221,127 @@ def rewrite_claim(
         if re.search(rf"\b{re.escape(label)}\b", claim.text, re.IGNORECASE)
     ]
     return suggest_grounded(claim, concept_labels=labels)
+
+
+class DrillHandoff(BaseModel):
+    """What happens when a student presses "Practise defending this".
+
+    Always answers. §7 lists `POST .../drill` as *"creates a 2-min defend
+    session (M6)"*, and M06 does not exist yet — so this returns either the
+    session M06 created or a stated reason there is none, and never a 502.
+
+    Rule 2, at the one place a student is most likely to meet it: a missing
+    module removes a FEATURE, never the page, and never silently.
+    """
+
+    claim_id: str
+    #: The questions the drill would put to them. Present either way — they are
+    #: already on the card, and a student who cannot start a drill can still
+    #: read what they would be asked and answer it out loud.
+    questions: list[str]
+    available: bool
+    session_id: str | None = None
+    #: Where to go when there is a session. M06 owns the URL shape.
+    session_url: str | None = None
+    needs_module: str | None = None
+    #: The sentence from `module.json`, written to be shown to a student.
+    explanation: str | None = None
+
+
+@router.post("/resumes/{resume_id}/claims/{claim_id}/drill", response_model=DrillHandoff)
+def start_drill(
+    resume_id: uuid.UUID,
+    claim_id: str,
+    session: Session = Depends(get_db),
+):
+    """§2.3 Screen 5, §7, and the module's own KPI.
+
+    AC-1.8: *"% of users who run ≥1 defend drill from the Claim Map ≥ 35% —
+    this is the module's real KPI."*  §13 is blunter still: *"The KPI to
+    actually watch is AC-1.8. Parsing accuracy is a means; a student running a
+    drill because they saw a risky claim is the outcome."*
+
+    Until this existed the Claim Map ended in a cul-de-sac — the only actions on
+    a risky card were "rewrite" and "edit" — and the KPI had no numerator at
+    all. Not "below target": unmeasurable.
+
+    The SESSION needs M06 and M06 is not built. The affordance does not, and
+    §2.4's quit-trigger table answers *"nothing to do next"* with *"every risky
+    claim has a 2-minute drill button"*.
+    """
+    resume = _require(session, resume_id)
+    raw = next((c for c in resume.claims if str(c.get("id")) == claim_id), None)
+    if raw is None:
+        raise HTTPException(status_code=404, detail="Claim not found on this resume")
+
+    claim = ResumeClaim(**raw)
+    questions = [probe.question for probe in claim.probes]
+
+    deps = dependency_registry()
+    dep = deps.get("M06")
+    if dep is None or not dep.base_url or not deps.is_available("M06"):
+        return DrillHandoff(
+            claim_id=claim_id,
+            questions=questions,
+            available=False,
+            needs_module="M06",
+            explanation=(
+                dep.on_missing
+                if dep is not None and dep.on_missing
+                else "Practising a claim needs M06 Mock Interview Engine, which is not running."
+            ),
+        )
+
+    # M06 is up. It owns the session; M01 hands over the claim and its ladder
+    # and does not model what a round looks like.
+    try:
+        request = urllib.request.Request(
+            f"{dep.base_url.rstrip('/')}/v1/drills",
+            data=json.dumps(
+                {
+                    "candidate_id": str(resume.candidate_id),
+                    "source_module": "M01",
+                    "claim_id": claim_id,
+                    "claim_text": claim.text,
+                    "probes": [
+                        {"depth": p.depth, "question": p.question, "expects": p.expects}
+                        for p in claim.probes
+                    ],
+                }
+            ).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(request, timeout=5.0) as response:
+            body = json.loads(response.read())
+    except Exception as exc:  # noqa: BLE001 - an upstream that fails degrades
+        log.info("M01 drill handoff to M06 failed: %s", exc)
+        return DrillHandoff(
+            claim_id=claim_id,
+            questions=questions,
+            available=False,
+            needs_module="M06",
+            explanation=(
+                "The interview engine is running but did not accept the drill. "
+                "The questions are below — they are the same ones it would ask."
+            ),
+        )
+
+    emit(
+        session,
+        "drill_started",
+        resume_id=resume.id,
+        candidate_id=resume.candidate_id,
+        probes=len(questions),
+    )
+    session.commit()
+
+    return DrillHandoff(
+        claim_id=claim_id,
+        questions=questions,
+        available=True,
+        session_id=str(body.get("session_id") or body.get("id") or ""),
+        session_url=body.get("url") or body.get("session_url"),
+    )
 
 
 # ---------------------------------------------------------------------------

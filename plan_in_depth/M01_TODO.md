@@ -76,14 +76,14 @@ need it, and apply the penalty only to those. Roughly twenty lines in
 
 | | |
 |---|---|
-| Backend tests passing | **260** (offline, no API key, no socket) |
+| Backend tests passing | **281** (offline, no API key, no socket) |
 | Release gates (§13) | **12 gate tests pass** — AC-1.1 (paste + upload), AC-1.2, AC-1.6, AC-1.9, the two contract gates, and AC-1.3/1.4/1.5 as regression floors |
 | FRs met | **19 fully · 1 partially · 0 missing** |
-| §7 API surface | **31 routes · every one reachable from a screen**, enforced at `-m gate` |
+| §7 API surface | **32 routes · every one reachable from a screen**, enforced at `-m gate` |
 | Completion | **~90%** of the written spec, and the last 10% is not evenly spread — see §11 |
 
 *Audited 2026-08-25 against the spec section by section, verifying in code
-rather than from this file. `pytest` 260 passed · `pytest -m gate` 12 passed ·
+rather than from this file. `pytest` 281 passed · `pytest -m gate` 12 passed ·
 `ruff check` clean · `tsc --noEmit` clean · `npm run build` clean ·
 `research/score_golden.py` 1.000 / 1.000 / 1.000.*
 
@@ -483,7 +483,7 @@ Every line below was checked against the code, not against this file. Two
 entries in §10 carried a ✅ and a body describing something unbuilt; both are
 corrected in place. Ordered by what it would cost a student.
 
-### 11.1 The KPI the module is measured on is not wired
+### 11.1 The KPI the module is measured on — affordance landed 2026-08-25
 
 **AC-1.8 — *"% of users who run ≥1 defend drill from the Claim Map ≥ 35% (this
 is the module's real KPI)"*.** §13 says it outright: *"The KPI to actually watch
@@ -497,15 +497,20 @@ binding §8.3 asks for. §2.4's quit-trigger table answers *"nothing to do next"
 with *"every risky claim has a 2-minute drill button"* — the counter to its last
 quit trigger is the piece that is missing.
 
-The SESSION is blocked on M06 and §8 files it there correctly. The AFFORDANCE is
-not blocked: a button that says what would happen and which module it is waiting
-on is exactly Rule 2 — a missing upstream removes a feature, never silently. As
-it stands the Claim Map ends in a cul-de-sac, and the module's own KPI has no
-numerator at all. That is not "below target"; it is unmeasurable.
+The SESSION is blocked on M06 and §8 files it there correctly. The AFFORDANCE
+was not, and is now built — a button that says what would happen and which
+module it is waiting on is exactly Rule 2. Before it, the Claim Map ended in a
+cul-de-sac and the KPI had no numerator at all: not "below target",
+unmeasurable.
 
-- ⬜ **A drill affordance on every risky claim**, degrading honestly while M06
-      is down.
-- ⬜ **`POST …/claims/{cid}/drill`** once M06 answers. Blocked, correctly.
+- ✅ **A drill affordance on every risky claim.** `POST …/claims/{cid}/drill`
+      exists and always answers: M06's session when M06 is up, and otherwise
+      the questions plus the sentence naming the module. `DrillPanel` renders
+      both, "Practise defending this" is the primary action on every card, and
+      `Enter` opens it — which is what §8.3 asked for all along.
+- ⬜ **The scored session itself.** Needs M06, declared in `module.json` as an
+      optional upstream. AC-1.8 can now be COUNTED; whether it clears 35% is a
+      question about M06.
 
 ### 11.2 The semantic tier — probes landed 2026-08-25, the rest is open
 

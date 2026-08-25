@@ -33,6 +33,7 @@ import { api } from "@ai/core";
 import type {
   Capabilities,
   ClaimListing,
+  DrillHandoff,
   Correction,
   CorrectionIn,
   Deps,
@@ -572,4 +573,27 @@ export function subscribeToProgress(
   source.onerror = finish;
 
   return () => source.close();
+}
+
+/* ------------------------------------------------------------------ */
+/*  The defend drill (§2.3 Screen 5, AC-1.8)                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Start the 2-minute drill on one claim.
+ *
+ * §13: *"The KPI to actually watch is AC-1.8. Parsing accuracy is a means; a
+ * student running a drill because they saw a risky claim is the outcome."*
+ * Until this existed the Claim Map ended in a cul-de-sac and that KPI had no
+ * numerator at all.
+ *
+ * A mutation rather than a query because it is something the student chooses
+ * to start — and because when M06 is up it creates a session, which is not a
+ * thing a screen should do by rendering.
+ */
+export function useStartDrill(resumeId: string) {
+  return useMutation({
+    mutationFn: (claimId: string) =>
+      api.post<DrillHandoff>(`/v1/resumes/${resumeId}/claims/${claimId}/drill`),
+  });
 }

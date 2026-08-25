@@ -592,3 +592,26 @@ export interface QualityReport {
   failures_by_code: Record<string, number>;
   timing: ParseTiming;
 }
+
+/* ------------------------------------------------------------------ */
+/*  The defend drill (§2.3 Screen 5, AC-1.8)                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * `POST /v1/resumes/{id}/claims/{cid}/drill`.
+ *
+ * Always answers. M06 owns the session and M06 is not built, so this carries
+ * either the session it created or a stated reason there is none — never a
+ * 502. `questions` is present either way: a student who cannot start a drill
+ * can still read what they would be asked and answer it out loud, which is
+ * most of the value and none of the infrastructure.
+ */
+export interface DrillHandoff {
+  claim_id: string;
+  questions: string[];
+  available: boolean;
+  session_id: string | null;
+  session_url: string | null;
+  needs_module: string | null;
+  explanation: string | null;
+}

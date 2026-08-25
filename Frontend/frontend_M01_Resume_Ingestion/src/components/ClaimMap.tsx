@@ -33,6 +33,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useClaims, useRewriteClaim } from "../api";
 import { BANDS, BAND_ORDER } from "./bands";
 import { ClaimCard } from "./ClaimCard";
+import { DrillPanel } from "./DrillPanel";
 import { RewriteDiff } from "./RewriteDiff";
 import { Empty, Panel, Section, SkeletonRows } from "../ui/primitives";
 import type { ResumeClaim, RiskBand } from "../types";
@@ -50,6 +51,7 @@ export function ClaimMap({
   const rewrite = useRewriteClaim(resumeId);
   const [cursor, setCursor] = useState(0);
   const [openRewrite, setOpenRewrite] = useState<string | null>(null);
+  const [openDrill, setOpenDrill] = useState<string | null>(null);
   const container = useRef<HTMLDivElement>(null);
 
   const claims = useMemo(() => listing.data?.claims ?? [], [listing.data]);
@@ -66,11 +68,17 @@ export function ClaimMap({
 
   const askForRewrite = useCallback(
     (claim: ResumeClaim) => {
+      setOpenDrill(null);
       setOpenRewrite(claim.id);
       rewrite.mutate(claim.id);
     },
     [rewrite],
   );
+
+  const startDrill = useCallback((claim: ResumeClaim) => {
+    setOpenRewrite(null);
+    setOpenDrill(claim.id);
+  }, []);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -88,6 +96,13 @@ export function ClaimMap({
         select(Math.max(cursor - 1, 0));
       } else if (event.key === "Enter") {
         event.preventDefault();
+        // §8.3: "Enter to open the drill". It used to open the rewrite, with a
+        // comment explaining that the drill was M06 and M06 was not built. The
+        // drill affordance exists now and degrades honestly on its own, so the
+        // binding does what the spec says.
+        startDrill(claims[cursor]);
+      } else if (event.key === "r") {
+        event.preventDefault();
         askForRewrite(claims[cursor]);
       } else if (event.key === "e") {
         event.preventDefault();
@@ -96,7 +111,7 @@ export function ClaimMap({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [claims, cursor, select, askForRewrite, onEditClaim]);
+  }, [claims, cursor, select, askForRewrite, startDrill, onEditClaim]);
 
   if (listing.isLoading) return <SkeletonRows rows={6} />;
 
@@ -147,7 +162,17 @@ export function ClaimMap({
                       onSelect={() => select(index)}
                       onRewrite={() => askForRewrite(claim)}
                       onEdit={() => onEditClaim(claim)}
+                      onDrill={() => startDrill(claim)}
                     />
+                    {openDrill === claim.id && (
+                      <div className="mt-2">
+                        <DrillPanel
+                          resumeId={resumeId}
+                          claimId={claim.id}
+                          onClose={() => setOpenDrill(null)}
+                        />
+                      </div>
+                    )}
                     {openRewrite === claim.id && (
                       <div className="mt-2">
                         {rewrite.isPending && <SkeletonRows rows={3} />}
@@ -168,7 +193,7 @@ export function ClaimMap({
       })}
 
       <p className="provenance mt-8">
-        j / k to move · Enter to rewrite · e to edit
+        j / k to move · Enter to practise · r to rewrite · e to edit
       </p>
     </div>
   );

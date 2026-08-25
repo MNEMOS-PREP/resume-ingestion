@@ -31,6 +31,7 @@ export { BANDS, BAND_ORDER, BandChip } from "./components/bands";
 export { RedFlagBanner, RedFlagPanel } from "./components/RedFlagBanner";
 export { SourceHighlight, RedactionNote } from "./components/SourceHighlight";
 export { ContactPanel } from "./components/ContactPanel";
+export { DrillPanel } from "./components/DrillPanel";
 export { DateEditor } from "./components/DateEditor";
 // Mounted by name in the platform shell, which owns "/" and cannot take a
 // second index route. Standalone still routes to them through m01Routes.
@@ -50,6 +51,7 @@ export {
   useCorrections,
   useDeleteClaim,
   useDeleteResume,
+  useStartDrill,
   useDeps,
   useDisclosure,
   useEditClaim,
@@ -77,6 +79,7 @@ export type {
   Correction,
   DisclosureLevel,
   DisclosureReport,
+  DrillHandoff,
   QualityReport,
   Resume,
   ResumeClaim,

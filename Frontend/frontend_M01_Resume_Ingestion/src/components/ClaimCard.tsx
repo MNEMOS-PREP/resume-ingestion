@@ -37,12 +37,14 @@ export function ClaimCard({
   onSelect,
   onRewrite,
   onEdit,
+  onDrill,
 }: {
   claim: ResumeClaim;
   selected: boolean;
   onSelect: () => void;
   onRewrite: () => void;
   onEdit: () => void;
+  onDrill: () => void;
 }) {
   const [showScores, setShowScores] = useState(false);
   const band = BANDS[claim.risk_band];
@@ -104,6 +106,15 @@ export function ClaimCard({
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
+        {/* First, and primary. §2.4 answers the "nothing to do next" quit
+            trigger with "every risky claim has a 2-minute drill button", and
+            AC-1.8 - the share of students who run one - is the module's own
+            KPI. "Rewrite it" and "Edit the bullet" are both about the
+            SENTENCE; this is the only action about whether they can defend
+            it. */}
+        <Btn type="button" variant="primary" size="sm" onClick={onDrill}>
+          Practise defending this
+        </Btn>
         {claim.risk_band !== "strong" && (
           <Btn type="button" variant="secondary" size="sm" onClick={onRewrite}>
             Rewrite it
