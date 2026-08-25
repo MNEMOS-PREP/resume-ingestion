@@ -159,7 +159,20 @@ def client_fixture(session, m04):
         yield session
 
     app.dependency_overrides[get_db] = override_get_db
-    yield TestClient(app)
+    # An ADMIN principal by default.
+    #
+    # Every route in this module is now behind `enforce_access`, and the two
+    # hundred tests below are about parsing, scoring and provenance rather than
+    # about who is allowed to look. Making each of them mint a matching student
+    # principal for its own random candidate id would put authorisation
+    # scaffolding in two hundred tests that are not testing authorisation - and
+    # the first person to get it slightly wrong would "fix" it by weakening the
+    # check.
+    #
+    # `test_access.py` is where the refusals are asserted, with real student
+    # principals, and it is the only file that should ever send a different
+    # header than this one.
+    yield TestClient(app, headers={"X-Role": "admin", "X-Candidate-Id": "test-admin"})
     app.dependency_overrides.clear()
 
 

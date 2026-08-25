@@ -49,6 +49,7 @@ from typing import Any
 
 from ai_core.concepts import normalise_alias
 from ai_core.dependencies import DependencyRegistry, DependencyStatus
+from ai_core.identity import Principal, may_see, principal_from_headers
 from fastapi import (
     APIRouter,
     Depends,
@@ -56,6 +57,7 @@ from fastapi import (
     Form,
     HTTPException,
     Query,
+    Request,
     UploadFile,
     status,
 )
@@ -103,16 +105,78 @@ from .storage import put as store_artifact
 
 log = logging.getLogger("uvicorn.error")
 
-router = APIRouter(prefix="/v1", tags=["M01 Resume Ingestion"])
-
-_MANIFEST = Path(__file__).resolve().parents[2] / "module.json"
-
 
 def get_db():
     from backend_M01_Resume_Ingestion.app import engine
 
     with Session(engine) as session:
         yield session
+
+
+def enforce_access(request: Request, session: Session = Depends(get_db)) -> Principal | None:
+    """Who is asking, and may they have what this route is about?
+
+    Declared once, on the ROUTER, so it runs on every endpoint in this module
+    including the ones nobody has written yet. That is deliberate and it is the
+    whole design: `ai_core.identity` makes the check one call precisely because
+    a per-route check is one somebody omits on the sixteenth endpoint, and the
+    sixteenth endpoint is the one that leaks. A router-level dependency cannot
+    be omitted by forgetting.
+
+    Two shapes of candidate-scoped route, and both are covered here:
+
+      /resumes/{resume_id}/...      the resume names its candidate
+      /resumes/candidate/{id}       the path names the candidate
+
+    Meta routes name neither and are not gated — `/deps`, `/capabilities` and
+    `/quality` are about the deployment, not about a student. `/quality` in
+    particular is aggregate by construction: counts, rates and failure codes,
+    with nobody named.
+
+    Ingest is the exception this cannot reach: `candidate_id` arrives in the
+    BODY, so it is checked in `_ingest` instead. Named here so the gap is a
+    stated one rather than a thing somebody discovers.
+    """
+    principal = principal_from_headers(dict(request.headers))
+
+    resume_id = request.path_params.get("resume_id")
+    candidate_id = request.path_params.get("candidate_id")
+
+    if resume_id is not None and candidate_id is None:
+        # `get_db`, not a session of its own. A second engine here bypassed the
+        # dependency override every test installs, so the check ran against a
+        # database with no tables in it — and the first symptom was forty-six
+        # unrelated tests failing on "no such table: resumes".
+        try:
+            resume = session.get(Resume, uuid.UUID(str(resume_id)))
+        except ValueError:
+            return principal
+        if resume is None:
+            # Not this dependency's job to 404, and refusing here would leak
+            # which ids exist to a caller who may not see any of them.
+            return principal
+        candidate_id = str(resume.candidate_id)
+
+    if candidate_id is None:
+        return principal
+
+    decision = may_see(principal, str(candidate_id))
+    if not decision:
+        # 403 with the reason, not 404. Pretending the resume does not exist
+        # would be a lie to the student who owns it, and this is the module
+        # whose entire argument is that a fact carries where it came from.
+        raise HTTPException(status_code=403, detail=decision.reason)
+
+    return principal
+
+
+router = APIRouter(
+    prefix="/v1",
+    tags=["M01 Resume Ingestion"],
+    dependencies=[Depends(enforce_access)],
+)
+
+_MANIFEST = Path(__file__).resolve().parents[2] / "module.json"
 
 
 @lru_cache(maxsize=1)
@@ -254,13 +318,28 @@ def _ingest(
     document: documents.Document,
     *,
     filename: str | None = None,
+    principal: Principal | None = None,
 ) -> Resume:
     """The pipeline, once, for a document that has already been read.
 
     Both entry points — multipart upload and pasted text — land here, so the
     paste path exercises the same extraction as the upload path rather than a
     simplified one. What you fix in isolation is what students get.
+
+    ── The one authorisation check `enforce_access` cannot do ──────────────────
+
+    Every other route names its candidate in the PATH, so the router-level
+    dependency resolves it and refuses before a handler runs. Ingest names it
+    in the BODY, which a dependency reading `request.path_params` cannot see —
+    so it is checked here, at the only place both entry points pass through.
+
+    Without it a student could upload a resume AS somebody else: not a read
+    leak, a write one, and the more surprising of the two.
     """
+    decision = may_see(principal, str(candidate_id))
+    if not decision:
+        raise HTTPException(status_code=403, detail=decision.reason)
+
     started = time.perf_counter()
     original = document.text
 
@@ -595,6 +674,7 @@ async def upload_resume(
     candidate_id: uuid.UUID = Form(...),
     file: UploadFile = File(...),
     session: Session = Depends(get_db),
+    principal: Principal | None = Depends(enforce_access),
 ):
     """A PDF or DOCX upload (§7, FR-1.1).
 
@@ -623,7 +703,9 @@ async def upload_resume(
             status_code=error.status,
             detail={"code": error.code, "message": error.message, "fallback": "text"},
         ) from error
-    return ResumeOut.of(_ingest(session, candidate_id, document, filename=file.filename))
+    return ResumeOut.of(
+        _ingest(session, candidate_id, document, filename=file.filename, principal=principal)
+    )
 
 
 def _record_failure(
@@ -662,26 +744,39 @@ def _record_failure(
 
 
 @router.post("/resumes/from-text", response_model=ResumeOut, status_code=status.HTTP_201_CREATED)
-def ingest_from_text(payload: ResumeIngestIn, session: Session = Depends(get_db)):
+def ingest_from_text(
+    payload: ResumeIngestIn,
+    session: Session = Depends(get_db),
+    principal: Principal | None = Depends(enforce_access),
+):
     """The always-works fallback (§7, §10).
 
     No file, no PDF library, no OCR. Every named intake error above points a
     student here, so this path must never be the one that is broken.
     """
     return ResumeOut.of(
-        _ingest(session, payload.candidate_id, documents.from_text(payload.raw_text))
+        _ingest(
+            session,
+            payload.candidate_id,
+            documents.from_text(payload.raw_text),
+            principal=principal,
+        )
     )
 
 
 @router.post("/resumes/ingest", response_model=ResumeOut, status_code=status.HTTP_201_CREATED)
-def ingest_resume(payload: ResumeIngestIn, session: Session = Depends(get_db)):
+def ingest_resume(
+    payload: ResumeIngestIn,
+    session: Session = Depends(get_db),
+    principal: Principal | None = Depends(enforce_access),
+):
     """This module's original name for `/resumes/from-text`.
 
     Kept because M02 and the frontend already call it. §7 names the other one,
     so both exist and neither is a redirect — a 307 through a POST loses the
     body in enough HTTP clients to be worth two lines instead.
     """
-    return ingest_from_text(payload, session)
+    return ingest_from_text(payload, session, principal)
 
 
 # ---------------------------------------------------------------------------

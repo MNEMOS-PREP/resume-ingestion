@@ -76,7 +76,10 @@ def main() -> int:
         yield session
 
     app.dependency_overrides[get_db] = _db
-    client = TestClient(app)
+    # An admin principal. Every route is behind `enforce_access` now, and this
+    # harness ingests twenty resumes under twenty synthetic candidate ids that
+    # belong to nobody. It is measuring the parser, not the authorisation.
+    client = TestClient(app, headers={"X-Role": "admin", "X-Candidate-Id": "golden-harness"})
 
     corpus = golden.load()
     if not corpus:

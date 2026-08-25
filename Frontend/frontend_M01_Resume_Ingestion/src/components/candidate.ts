@@ -14,6 +14,8 @@
  * that has to change.
  */
 
+import { setIdentityHeaders } from "@ai/core";
+
 const KEY = "m01.candidateId";
 
 /** M01's first seeded candidate. Deliberately shared across the module seeds. */
@@ -38,8 +40,30 @@ export function setCandidateId(next: string): void {
   if (trimmed === current) return;
   current = trimmed || DEFAULT_CANDIDATE_ID;
   window.localStorage.setItem(KEY, current);
+  publishIdentity();
   listeners.forEach((listener) => listener());
 }
+
+/**
+ * Tell `@ai/core` who the browser is.
+ *
+ * The backend now resolves a caller through `ai_core.identity` and answers 403
+ * for candidate-scoped data without one, so this is what keeps the app working
+ * — and, more to the point, what makes "you are looking at your own resume"
+ * true rather than assumed.
+ *
+ * This is the DEV shape: a header naming the candidate, which the backend
+ * honours only under `AI_AUTH_MODE=dev`. It is the same trust this control has
+ * always had — the id was already whatever you typed — except that it now has
+ * one name, is refused in production, and the swap for a real session is one
+ * call in this file.
+ */
+export function publishIdentity(): void {
+  setIdentityHeaders({ "X-Role": "student", "X-Candidate-Id": current });
+}
+
+// At module load, before any screen has rendered or fetched.
+publishIdentity();
 
 export function subscribeCandidateId(listener: () => void): () => void {
   listeners.add(listener);

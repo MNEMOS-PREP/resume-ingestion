@@ -76,14 +76,14 @@ need it, and apply the penalty only to those. Roughly twenty lines in
 
 | | |
 |---|---|
-| Backend tests passing | **281** (offline, no API key, no socket) |
-| Release gates (§13) | **12 gate tests pass** — AC-1.1 (paste + upload), AC-1.2, AC-1.6, AC-1.9, the two contract gates, and AC-1.3/1.4/1.5 as regression floors |
+| Backend tests passing | **295** (offline, no API key, no socket) |
+| Release gates (§13) | **24 gate tests pass** — AC-1.1 (paste + upload), AC-1.2, AC-1.6, AC-1.9, the two contract gates, and AC-1.3/1.4/1.5 as regression floors |
 | FRs met | **19 fully · 1 partially · 0 missing** |
 | §7 API surface | **32 routes · every one reachable from a screen**, enforced at `-m gate` |
 | Completion | **~90%** of the written spec, and the last 10% is not evenly spread — see §11 |
 
 *Audited 2026-08-25 against the spec section by section, verifying in code
-rather than from this file. `pytest` 281 passed · `pytest -m gate` 12 passed ·
+rather than from this file. `pytest` 295 passed · `pytest -m gate` 12 passed ·
 `ruff check` clean · `tsc --noEmit` clean · `npm run build` clean ·
 `research/score_golden.py` 1.000 / 1.000 / 1.000.*
 
@@ -511,6 +511,41 @@ unmeasurable.
 - ⬜ **The scored session itself.** Needs M06, declared in `module.json` as an
       optional upstream. AC-1.8 can now be COUNTED; whether it clears 35% is a
       question about M06.
+
+### 11.1b ✅ Identity — M01 stops serving every student's data to anyone (2026-08-25)
+
+Not in the original audit because it is not in the spec: M01 has no §-numbered
+requirement to authenticate anybody. It was filed as `PLATFORM_TODO.md` item 1
+and it was this module's sharpest edge — `GET /contact` has its own route and
+its own audit tag *specifically* so "who saw this student's phone number" is
+answerable, and the answer was "anyone who guessed a UUID".
+
+- ✅ **`enforce_access` is declared on the ROUTER**, so it runs on every
+      endpoint including ones nobody has written yet. `ai_core.identity` makes
+      the check one call precisely because a per-route check is one somebody
+      omits on the sixteenth endpoint — and a router-level dependency cannot be
+      omitted by forgetting.
+- ✅ **Ingest is checked in `_ingest`.** `candidate_id` arrives in the BODY
+      there, which a dependency reading `path_params` cannot see. Without it a
+      student could upload a resume AS somebody else: a WRITE leak, and the
+      more surprising of the two.
+- ✅ **403 with the reason, not 404.** Pretending the resume does not exist
+      would be a lie to the student who owns it, in the module whose whole
+      argument is that a fact carries where it came from.
+- ✅ **`/deps`, `/capabilities`, `/quality` stay open** — they are about the
+      deployment, and `/quality` is aggregate by construction. Gating it would
+      make an operator log in to find out whether the parser works.
+- ✅ **The frontend says who it is** via `setIdentityHeaders` (core v0.9.1),
+      set from the candidate control that already existed.
+- 🟡 **It is still the dev shape.** A header naming the candidate, honoured
+      only under `AI_AUTH_MODE=dev`. That is the same trust this control always
+      had; what changed is that it has one name, is refused in production, and
+      the swap for a real session is one call in `candidate.ts`. Login itself
+      is `Platform_Shell`'s, and is the open half of PLATFORM_TODO item 1.
+
+`test_access.py` — 14 tests, 12 of them gates — asserts the refusals: eight
+routes parametrised so the guard is proven to be the ROUTER's rather than eight
+handlers each remembering.
 
 ### 11.2 The semantic tier — probes landed 2026-08-25, the rest is open
 
