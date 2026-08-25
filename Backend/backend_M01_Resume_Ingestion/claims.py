@@ -468,13 +468,59 @@ def redact(text: str, block: ContactBlock) -> str:
 #  Quantifiers (spec §5)
 # ---------------------------------------------------------------------------
 
+#: A number with a unit attached.
+#:
+#: The separator may be a HYPHEN. A resume writes "a 72-hour window" and a
+#: "12k-node graph" at least as often as it writes "72 hours", and `\s*` cannot
+#: cross a hyphen — so every compound-adjective measurement on a real resume
+#: was invisible, and the bullet was scored as though it had no number in it.
 _QUANTIFIER = re.compile(
-    r"(?P<value>\d+(?:\.\d+)?)\s*"
+    r"(?P<value>\d+(?:\.\d+)?)[\s-]*"
     r"(?P<unit>%|percent|ms|milliseconds?|seconds?|s\b|minutes?|hours?|x\b|"
     r"k\b|m\b|lakhs?|crores?|users?|requests?|queries|records?|rows?|nodes?|"
     r"people|members?|students?|teams?)",
     re.IGNORECASE,
 )
+
+#: The metric names that make a BARE number a measurement.
+#:
+#: `0.897` on its own is a version, a year fragment or a price. `macro-F1:
+#: 0.897` is the single most important fact on the bullet — and until this
+#: existed M01 told a student with a measured ML result that "there is no
+#: number in it and nothing named that an interviewer can hold on to".
+#:
+#: A bare number is only ever trusted next to one of these. The alternative —
+#: matching any decimal — pulls in `DeBERTa-v3`, `2022-2026` and every version
+#: string on the page, and a fabricated quantifier raises `specificity` for a
+#: claim that has not earned it.
+_METRIC_NAME = (
+    r"(?:macro[-\s]?|micro[-\s]?|weighted[-\s]?|top[-\s]?\d[-\s]?)?"
+    r"(?:f1(?:[-\s]?score)?|accuracy|precision|recall|au[rp]?[oc]c?|auc|"
+    r"m?ap@?\d*|bleu|rouge(?:[-\s]?[l12n])?|meteor|iou|dice|r2|r\^2|"
+    r"[mr]?mse|mae|wer|cer|perplexity|ppl|specificity|sensitivity|"
+    r"kappa|f\-?beta|ndcg|mrr)"
+)
+
+#: "macro-F1: 0.897", "F1 of 0.897", "accuracy = 0.92", "0.897 macro-F1".
+#:
+#: The whole phrase is kept as `raw`, not just the digits: the depth-2 probe
+#: quotes it back — *"You quote macro-F1: 0.897. How was that measured?"* — and
+#: "You quote 0.897" is a question about nothing.
+_METRIC_BEFORE = re.compile(
+    rf"(?P<metric>{_METRIC_NAME})\s*(?:score)?\s*"
+    r"(?:[:=]\s*|\bof\s+|\bis\s+|\bat\s+|\s+)"
+    r"(?P<value>\d+(?:\.\d+)?)\b",
+    re.IGNORECASE,
+)
+
+_METRIC_AFTER = re.compile(
+    rf"(?P<value>\d+(?:\.\d+)?)\s+(?P<metric>{_METRIC_NAME})\b",
+    re.IGNORECASE,
+)
+
+#: A four-digit number in a resume is a year far more often than a measurement.
+#: `2026 accuracy` is a sentence nobody writes; `Recall 2024` is a heading.
+_LOOKS_LIKE_A_YEAR = re.compile(r"^(?:19|20)\d{2}$")
 
 _METRIC_HINTS: tuple[tuple[str, str], ...] = (
     ("accuracy", "accuracy"),
@@ -502,25 +548,76 @@ def _metric_hint(context: str) -> str | None:
 
 
 def extract_quantifiers(text: str, base: int, artifact_id: uuid.UUID) -> list[Quantifier]:
-    out: list[Quantifier] = []
+    """Every measurement on this bullet (spec §5).
+
+    Two passes, because a resume writes a number in two shapes: with a unit
+    ("380ms", "12k-node", "94%"), or named by a metric ("macro-F1: 0.897").
+    The second shape carried nothing before, which meant a bullet quoting a
+    measured ML result scored as though it had no number at all — and
+    `specificity` and `verifiability` both read this list, so the claim came
+    out a whole risk band worse than it is. That is not a copy bug: it puts the
+    wrong bullet in "the one thing to fix first".
+
+    Overlapping matches are resolved in favour of the LONGER one, so
+    "macro-F1: 0.897" is one quantifier rather than that plus a bare 0.897.
+    """
+    found: list[tuple[int, int, str, float, str | None]] = []
+
     for match in _QUANTIFIER.finditer(text):
-        raw = match.group(0)
-        unit = (match.group("unit") or "").strip().lower() or None
-        window = text[max(0, match.start() - 40) : match.end() + 40]
+        found.append(
+            (
+                match.start(),
+                match.end(),
+                match.group(0),
+                float(match.group("value")),
+                (match.group("unit") or "").strip().lower() or None,
+            )
+        )
+
+    for pattern in (_METRIC_BEFORE, _METRIC_AFTER):
+        for match in pattern.finditer(text):
+            raw_value = match.group("value")
+            # A metric name beside a year is a heading, not a measurement.
+            if _LOOKS_LIKE_A_YEAR.match(raw_value):
+                continue
+            found.append(
+                (
+                    match.start(),
+                    match.end(),
+                    match.group(0).strip(),
+                    float(raw_value),
+                    # The metric IS the unit here — "0.897" is dimensionless and
+                    # what makes it meaningful is that it is an F1.
+                    match.group("metric").strip().lower(),
+                )
+            )
+
+    # Longest first, so a metric phrase wins over the bare number inside it.
+    found.sort(key=lambda item: (item[0], -(item[1] - item[0])))
+
+    out: list[Quantifier] = []
+    claimed: list[tuple[int, int]] = []
+    for start, end, raw, value, unit in found:
+        if any(start < taken_end and end > taken_start for taken_start, taken_end in claimed):
+            continue
+        claimed.append((start, end))
+        window = text[max(0, start - 40) : end + 40]
         out.append(
             Quantifier(
                 raw=raw,
-                value=float(match.group("value")),
+                value=value,
                 unit=unit,
                 metric_hint=_metric_hint(window),
                 span=SourceSpan(
                     artifact_id=artifact_id,
-                    start=base + match.start(),
-                    end=base + match.end(),
+                    start=base + start,
+                    end=base + end,
                     text=raw,
                 ),
             )
         )
+
+    out.sort(key=lambda q: q.span.start)
     return out
 
 

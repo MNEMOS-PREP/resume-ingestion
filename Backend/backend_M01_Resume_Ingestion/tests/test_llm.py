@@ -17,7 +17,7 @@ import uuid
 from datetime import date
 
 import pytest
-from backend_M01_Resume_Ingestion import llm, probes
+from backend_M01_Resume_Ingestion import llm, probes, rewrite
 from backend_M01_Resume_Ingestion.claims import (
     PROBE_VERSION,
     ResumeClaim,
@@ -321,3 +321,92 @@ def test_enrich_is_a_no_op_without_a_model():
 
     assert probes.enrich(claims, concepts_by_label={}) == 0
     assert [p.question for p in claims[0].probes] == before
+
+
+# ---------------------------------------------------------------------------
+#  The rewrite guard (FR-1.19, §15 decision 2)
+# ---------------------------------------------------------------------------
+
+
+def _rewrite(suggestion: str) -> llm.LLMResult:
+    return llm.LLMResult(
+        ok=True, model="test/model", data={"suggestion": suggestion, "first_fix": "Add the split."}
+    )
+
+
+MEASURED = "Developed a DeBERTa pipeline for complaint classification (macro-F1: 0.897)."
+
+
+def test_a_rewrite_that_invents_a_number_is_refused():
+    """§15 decision 2, enforced rather than requested.
+
+    A model fills an empty slot with a plausible number, and a student who
+    pastes it walks into exactly the interview this module exists to prevent -
+    with no way to know which number was theirs.
+    """
+    llm.set_llm(FakeLLM(_rewrite("Raised macro-F1 to 0.95 across 40,000 complaints.")))
+
+    result = rewrite.suggest_grounded(_claim(MEASURED), concept_labels=[])
+
+    assert "0.95" not in result.suggestion
+    assert result.suggestion == rewrite.suggest(_claim(MEASURED), concept_labels=[]).suggestion
+
+
+def test_a_rewrite_that_drops_their_number_is_refused():
+    """Less dangerous than inventing one and still wrong: the measurement is
+    the most defensible thing on the bullet, and losing it is advice to make
+    the claim weaker."""
+    llm.set_llm(FakeLLM(_rewrite("Developed a strong pipeline that performed very well.")))
+
+    result = rewrite.suggest_grounded(_claim(MEASURED), concept_labels=[])
+
+    assert "0.897" in result.suggestion or "[" in result.suggestion
+
+
+def test_a_faithful_rewrite_is_kept_and_keeps_their_words():
+    """The case the whole path exists for. The template threw the student's own
+    nouns away - "Developed [what exactly] for the thing you built" about a
+    bullet naming a DeBERTa pipeline."""
+    llm.set_llm(
+        FakeLLM(
+            _rewrite(
+                "In [situation], I developed a DeBERTa pipeline for complaint "
+                "classification, achieving macro-F1: 0.897."
+            )
+        )
+    )
+
+    result = rewrite.suggest_grounded(_claim(MEASURED), concept_labels=[])
+
+    assert "DeBERTa" in result.suggestion
+    assert "0.897" in result.suggestion
+    assert "the thing you built" not in result.suggestion
+
+
+def test_a_sentence_ending_period_is_not_an_invented_number():
+    """The guard's own bug, as a test.
+
+    `\d[\d.,]*` is greedy over the trailing separator, so a bullet ending
+    "...macro-F1: 0.897." yielded `0.897.` while the original yielded `0.897`.
+    The guard called a faithful rewrite an invention and the one case this path
+    exists to fix fell back to the skeleton - silently, and only visible by
+    reading the log.
+    """
+    assert not rewrite._invents_facts("scored macro-F1: 0.897", "achieved macro-F1: 0.897.")
+
+
+def test_a_bracketed_prompt_is_not_a_claimed_fact():
+    """"[dataset size]" is the model asking the student for a fact, which is
+    the behaviour the spec wants. Only what is OUTSIDE the brackets is a claim."""
+    assert not rewrite._invents_facts(
+        "Built a classifier", "Built a classifier over [40k samples] in [duration]"
+    )
+
+
+def test_with_no_model_the_rewrite_is_the_deterministic_skeleton():
+    llm.set_llm(llm.NullLLM())
+    claim = _claim(MEASURED)
+
+    assert rewrite.suggest_grounded(claim, concept_labels=[]).suggestion == (
+        rewrite.suggest(claim, concept_labels=[]).suggestion
+    )

@@ -10,8 +10,10 @@ platform debt list.
 """
 
 import uuid
+from datetime import date
 
 import pytest
+from backend_M01_Resume_Ingestion.claims import band, extract_quantifiers, score_claim
 
 RESUME = """PRIYA SHARMA
 priya.sharma@example.com | +91 98765 43210 | github.com/priyash
@@ -282,3 +284,95 @@ def test_parse_completes_inside_the_budget(client, m04_up):
 
     assert data["parse_ms"] > 0
     assert data["parse_ms"] < 25_000
+
+
+# ---------------------------------------------------------------------------
+#  Quantifiers the old pattern could not see
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("macro-F1: 0.897", "macro-F1: 0.897"),
+        ("F1 of 0.897", "F1 of 0.897"),
+        ("accuracy = 0.92", "accuracy = 0.92"),
+        ("0.897 macro-F1", "0.897 macro-F1"),
+        ("AUC of 0.81", "AUC of 0.81"),
+        ("Dice 0.88 on the validation split", "Dice 0.88"),
+        # The hyphen case: `\s*` cannot cross it, so every compound-adjective
+        # measurement on a real resume was invisible.
+        ("within a 72-hour window", "72-hour"),
+    ],
+)
+def test_a_measurement_without_a_unit_is_still_a_measurement(text, expected):
+    """A bare decimal is only a number when a metric names it.
+
+    `macro-F1: 0.897` is the most important fact on the bullet, and the old
+    pattern required a unit — so a student with a measured ML result was told
+    "there is no number in it and nothing named an interviewer can hold on to".
+    """
+    found = extract_quantifiers(text, 0, uuid.uuid4())
+
+    assert [q.raw for q in found] == [expected]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "B.Tech CSE, 2022 - 2026, CGPA 8.1",
+        "DeBERTa-v3 pipeline",
+        "version 3.11 of Python",
+        "Recall 2024",
+    ],
+)
+def test_a_year_or_a_version_is_not_a_measurement(text):
+    """The other side of the line, and the expensive one.
+
+    A fabricated quantifier RAISES `specificity` and `verifiability` for a
+    claim that has not earned it — so matching any decimal would make every
+    bullet with a version number look better defended than it is.
+    """
+    assert extract_quantifiers(text, 0, uuid.uuid4()) == []
+
+
+def test_a_metric_phrase_is_one_quantifier_not_two():
+    """Overlaps resolve to the longer match.
+
+    The depth-2 probe quotes `raw` back — "You quote macro-F1: 0.897. How was
+    that measured?" — and "You quote 0.897" is a question about nothing.
+    """
+    found = extract_quantifiers("achieving macro-F1: 0.897 overall", 0, uuid.uuid4())
+
+    assert len(found) == 1
+    assert found[0].raw == "macro-F1: 0.897"
+    assert found[0].value == 0.897
+
+
+def test_an_unreadable_number_costs_the_claim_a_whole_risk_band():
+    """Why this is a scoring bug and not a copy bug.
+
+    `specificity` and `verifiability` both read the quantifier list, and the
+    band falls out of both. A bullet whose measurement we cannot see is banded
+    as though it has none — and `fix_first` picks the most prominent RISKY
+    claim, so this puts the wrong bullet in "the one thing to fix first".
+    """
+    text = "Developed a DeBERTa pipeline for complaint classification (macro-F1: 0.897)."
+    rid = uuid.uuid4()
+    today = date.today()
+
+    with_number = score_claim(
+        text,
+        quantifiers=extract_quantifiers(text, 0, rid),
+        concepts=[],
+        has_link=False,
+        prominence=0.8,
+        today=today,
+    )
+    blind = score_claim(
+        text, quantifiers=[], concepts=[], has_link=False, prominence=0.8, today=today
+    )
+
+    assert with_number["specificity"] > blind["specificity"]
+    assert with_number["verifiability"] > blind["verifiability"]
+    assert band(with_number["risk_score"]) != band(blind["risk_score"])

@@ -97,7 +97,7 @@ from .extract import drop_redundant, extract_surface_forms, scan_prose
 from .retention import Disclosure, ShareGrant
 from .revisions import ALLOWED as ALLOWED_CORRECTIONS
 from .revisions import apply_correction, diff_claims
-from .rewrite import RewriteSuggestion, suggest
+from .rewrite import RewriteSuggestion, suggest_grounded
 from .storage import put as store_artifact
 
 router = APIRouter(prefix="/v1", tags=["M01 Resume Ingestion"])
@@ -1217,7 +1217,7 @@ def rewrite_claim(
         for label in resume.resolved_concepts
         if re.search(rf"\b{re.escape(label)}\b", claim.text, re.IGNORECASE)
     ]
-    return suggest(claim, concept_labels=labels)
+    return suggest_grounded(claim, concept_labels=labels)
 
 
 # ---------------------------------------------------------------------------
