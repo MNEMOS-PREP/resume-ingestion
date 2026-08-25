@@ -1,4 +1,23 @@
-import type { NavItem } from "@ai/core";
+/**
+ * One entry in a module's own top bar.
+ *
+ * Declared here rather than imported. `@ai/core` exported a `NavItem` up to
+ * v0.6.0 and dropped it in 0.7.0 — on the stated grounds that it "was imported
+ * by nothing", which was not true: this file imported it, and M01 is pinned at
+ * v0.6.0, so the break was real but invisible. It would have surfaced as a
+ * type error the day somebody bumped the pin for an unrelated reason.
+ *
+ * Two words and a URL is not a platform contract in any case. The things
+ * `@ai/core` owns are the ones nineteen repos must agree on — what a sourced
+ * fact looks like, what "not yet tested" looks like. Nav is chrome, and 0.7.0's
+ * own reasoning says so: *"a module owns its own chrome; this package owns the
+ * vocabulary."*  Keeping it local means M01 can take a core upgrade without
+ * this line being the thing that stops it.
+ */
+export interface NavItem {
+  to: string;
+  label: string;
+}
 
 /**
  * Nav for M01 running standalone. The platform shell supplies its own.

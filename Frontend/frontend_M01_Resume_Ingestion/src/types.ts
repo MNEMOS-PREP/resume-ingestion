@@ -552,6 +552,25 @@ export interface RevokeResult {
  * screen cannot disagree with the release checklist about whether the bar was
  * met.
  */
+/**
+ * AC-1.6, evaluated. §13: *"p95 end-to-end parse (2 pages, no OCR) ≤ 25 s"*.
+ *
+ * `excluded_ocr` is reported rather than hidden. The criterion's own words
+ * exclude OCR reads, and §11 budgets OCR at 15 s of its own — but a p95 over a
+ * corpus with an unstated number of resumes set aside is not a measurement
+ * anybody can check.
+ */
+export interface ParseTiming {
+  measured: number;
+  excluded_ocr: number;
+  p50_ms: number;
+  p95_ms: number;
+  max_ms: number;
+  target_ms: number;
+  over_budget: boolean;
+  ocr_p95_ms: number;
+}
+
 export interface QualityReport {
   resumes: number;
   confirmed: number;
@@ -571,4 +590,5 @@ export interface QualityReport {
   retention: RetentionPolicy;
   failed: number;
   failures_by_code: Record<string, number>;
+  timing: ParseTiming;
 }

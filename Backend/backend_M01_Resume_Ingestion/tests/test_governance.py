@@ -12,6 +12,7 @@ import uuid
 from datetime import UTC, date, datetime, timedelta
 
 from backend_M01_Resume_Ingestion import objectstore, retention
+from backend_M01_Resume_Ingestion.models import Resume
 from backend_M01_Resume_Ingestion.retention import Disclosure, ShareGrant
 
 
@@ -190,3 +191,61 @@ def test_the_quality_report_says_which_store_is_in_use(client):
     body = client.get("/v1/quality").json()
     assert body["object_store"] in {"local", "s3"}
     assert "retention" in body
+
+
+# ---------------------------------------------------------------------------
+#  AC-1.6 — p95 parse time, evaluated rather than left in a column
+# ---------------------------------------------------------------------------
+
+
+def test_the_quality_report_evaluates_the_parse_time_budget(client, m04_up):
+    """§13: "p95 end-to-end parse (2 pages, no OCR) <= 25 s".
+
+    `parse_ms` was written on every row from the first commit and nothing ever
+    added it up, so the criterion was a number on every resume and an answer on
+    none - the same shape AC-1.7 was in before `GET /v1/quality` existed.
+    """
+    m04_up()
+    _ingest(client)
+
+    timing = client.get("/v1/quality").json()["timing"]
+
+    assert timing["measured"] >= 1
+    assert timing["target_ms"] == 25_000
+    assert 0 < timing["p95_ms"] <= 25_000
+    assert timing["over_budget"] is False
+    assert timing["p50_ms"] <= timing["p95_ms"] <= timing["max_ms"]
+
+
+def test_an_empty_corpus_is_not_over_budget(client):
+    """A fresh clone has breached nothing.
+
+    `over_budget` on zero parses would make a first run look broken, and the
+    first thing anybody does with a new checkout is open this page.
+    """
+    timing = client.get("/v1/quality").json()["timing"]
+
+    assert timing["measured"] == 0
+    assert timing["p95_ms"] == 0
+    assert timing["over_budget"] is False
+
+
+def test_an_ocr_read_is_excluded_from_the_budget_but_still_counted(client, session, m04_up):
+    """AC-1.6 excludes OCR in its own wording; §11 budgets it at 15 s of its own.
+
+    Excluding it silently would let a corpus of scanned resumes report a p95
+    over three parses without saying which three were set aside.
+    """
+    m04_up()
+    data = _ingest(client)
+
+    row = session.get(Resume, uuid.UUID(data["id"]))
+    row.ocr_used = True
+    session.add(row)
+    session.commit()
+
+    timing = client.get("/v1/quality").json()["timing"]
+
+    assert timing["excluded_ocr"] == 1
+    assert timing["measured"] == 0
+    assert timing["ocr_p95_ms"] > 0

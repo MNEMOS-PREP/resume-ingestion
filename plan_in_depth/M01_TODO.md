@@ -17,7 +17,17 @@ Legend: ✅ done · 🟡 partly done · ⬜ not started
 
 ---
 
-## 0. Do these next — two ideas worth stealing
+## 0. Ideas and scouting
+
+Things worth building that did not come from the spec — usually from reading
+somebody else's implementation. **New ideas go at the top of this section.**
+
+The rule we keep arriving at: borrow a **technique**, not a **component**. The
+platform's contracts — character offsets, per-fact provenance, permanent
+evidence — are more demanding than general-purpose tools assume, so integration
+usually costs more than reimplementing the one idea we actually wanted.
+
+### Scouting verdict: pdf-inspector — **do not adopt, take two ideas**
 
 From reading [firecrawl/pdf-inspector](https://github.com/firecrawl/pdf-inspector)
 (Rust, MIT). Its extraction engine is **not** worth adopting — M01 already does
@@ -66,16 +76,22 @@ need it, and apply the penalty only to those. Roughly twenty lines in
 
 | | |
 |---|---|
-| Backend tests passing | **233** (offline, no API key, no socket) |
-| Release gates (§13) | **10 gate tests pass** — AC-1.1 (paste + upload), AC-1.2, AC-1.6, AC-1.9, and AC-1.3/1.4/1.5 as regression floors |
+| Backend tests passing | **245** (offline, no API key, no socket) |
+| Release gates (§13) | **12 gate tests pass** — AC-1.1 (paste + upload), AC-1.2, AC-1.6, AC-1.9, the two contract gates, and AC-1.3/1.4/1.5 as regression floors |
 | FRs met | **19 fully · 1 partially · 0 missing** |
-| Completion | **~98%** of the written spec. What remains needs another module (§8), real consented resumes (§7), an S3 bucket, or a human decision (§9) |
+| §7 API surface | **31 routes · every one reachable from a screen**, enforced at `-m gate` |
+| Completion | **~90%** of the written spec, and the last 10% is not evenly spread — see §11 |
 
-*Audited 2026-08-23 against the spec section by section, verifying in code
-rather than from this file — which was over-marked on eight FRs before that
-pass. `pytest` 170 passed · `pytest -m gate` 10 passed ·
+*Audited 2026-08-25 against the spec section by section, verifying in code
+rather than from this file. `pytest` 245 passed · `pytest -m gate` 12 passed ·
 `ruff check` clean · `tsc --noEmit` clean · `npm run build` clean ·
 `research/score_golden.py` 1.000 / 1.000 / 1.000.*
+
+> **The completion figure moved down, not up.** The 2026-08-23 pass counted
+> functional requirements and got ~98%, which was true and misleading: FRs are
+> not the whole spec. §11 audits what the FR table does not cover — the KPI in
+> §13, the semantic tier in §6, the screens in §2.3 and §8 — and those are where
+> the remaining work is. Nothing regressed; the measurement got honest.
 
 ---
 
@@ -100,7 +116,7 @@ pass. `pytest` 170 passed · `pytest -m gate` 10 passed ·
 | FR-1.15 | Re-upload with a diff view | ✅ | `DiffPage.tsx` at `/resumes/:id/diff` |
 | FR-1.16 | OCR fallback when the text layer is empty | ✅ | PaddleOCR installed and verified reading a real scan |
 | FR-1.17 | Contact block never rendered, logged, or modelled | ✅ | separation, redaction, and an encrypted column (`crypto.py`) |
-| FR-1.18 | p95 ≤ 25 s for a 2-page resume | ✅ | `parse_ms` on every row |
+| FR-1.18 | p95 ≤ 25 s for a 2-page resume | ✅ | `parse_ms` on every row, and `GET /v1/quality` now computes the p95 against the 25 s line. Recording it was never the same as meeting it |
 | FR-1.19 | Auto-STAR rewrite for weak claims, on request only | ✅ | `rewrite.py` |
 | FR-1.20 | `resume.*` analytics events at every stage boundary | ✅ | `events.py` |
 
@@ -355,14 +371,18 @@ another module; §8 is the list that is.
 
 ### Parse quality
 
-- ✅ **Skill matching step 3 (§6.4).** Only exact-match and the
-      short-token guard are built. `rapidfuzz` is not installed and there is no
-      `aliases.yaml`; the spec wants ~2,000 seeded entries. This is the single
-      biggest lever on skill recall against real resumes.
-- ✅ **Typography tier for headings (§6.3).** The spec scores a line on font
-      size z-score and bold as well as caps and lexicon. `documents.py` extracts
-      words but not font attributes, so a heading in a font the lexicon has
-      never seen is invisible.
+- ✅ **Skill matching step 3 (§6.4).** `rapidfuzz` is installed and wired;
+      `normalise.resolve` runs exact → short-token guard → fuzzy, with a
+      length-ratio and first-character guard so "Java" never becomes
+      "JavaScript". Verified: `Tensorflow 2.x`, `Pythonn`, `Kubernets` and
+      `Dynamic Programing` all resolve; `R` and `C` stop at exact.
+      **What is still short is the TABLE, not the ladder** — 271 aliases
+      against the spec's ~2,000, and no versioned `aliases.yaml`. See §10
+      "Parse quality, still open" below.
+- ✅ **Typography tier for headings (§6.3).** `documents.py` records
+      `line_styles` from font size and weight (`_line_style`, `_body_size`,
+      `_type_by_position`), so a heading in a font the lexicon has never seen
+      is still scored on how it is SET rather than only on what it says.
 - ✅ **PDF table extraction (§6.2.4).** `pdfplumber` reads ruled regions and emits
       `key: value`; appended rather than spliced, so no committed offset moves.
 - ✅ **`Spring 2025`, `2 months` (§3.2.3).** Seasons resolve to a month;
@@ -400,3 +420,132 @@ another module; §8 is the list that is.
       could not answer.
 - ✅ **Manual QA script (§12).** [QA.md](../QA.md) — nine steps plus a copy
       check, each one a thing a test cannot decide for you.
+- ✅ **AC-1.6 is reported.** `GET /v1/quality` carries a `timing` block: p50,
+      p95, slowest, and §13's 25 s line evaluated as `over_budget`. OCR reads
+      are excluded per the criterion's own wording and counted separately, so
+      the exclusion is visible rather than a filter nobody can check.
+
+---
+
+## 11. What is actually left — audited against the spec, 2026-08-25
+
+Every line below was checked against the code, not against this file. Two
+entries in §10 carried a ✅ and a body describing something unbuilt; both are
+corrected in place. Ordered by what it would cost a student.
+
+### 11.1 The KPI the module is measured on is not wired
+
+**AC-1.8 — *"% of users who run ≥1 defend drill from the Claim Map ≥ 35% (this
+is the module's real KPI)"*.** §13 says it outright: *"The KPI to actually watch
+is AC-1.8. Parsing accuracy is a means; a student running a drill because they
+saw a risky claim is the outcome."*
+
+There is no drill. Not the endpoint §7 lists
+(`POST /v1/resumes/{id}/claims/{cid}/drill`), not the button §2.3 Screen 4 puts
+on every risky card (`[ Practise defending this (2 min) ]`), not the `Enter`
+binding §8.3 asks for. §2.4's quit-trigger table answers *"nothing to do next"*
+with *"every risky claim has a 2-minute drill button"* — the counter to its last
+quit trigger is the piece that is missing.
+
+The SESSION is blocked on M06 and §8 files it there correctly. The AFFORDANCE is
+not blocked: a button that says what would happen and which module it is waiting
+on is exactly Rule 2 — a missing upstream removes a feature, never silently. As
+it stands the Claim Map ends in a cul-de-sac, and the module's own KPI has no
+numerator at all. That is not "below target"; it is unmeasurable.
+
+- ⬜ **A drill affordance on every risky claim**, degrading honestly while M06
+      is down.
+- ⬜ **`POST …/claims/{cid}/drill`** once M06 answers. Blocked, correctly.
+
+### 11.2 The whole semantic tier is absent
+
+The spec's pipeline is deterministic-first with an LLM layer on top. Only the
+first half exists. This is a deliberate and well-argued position — `claims.py`
+opens with three reasons and they are good ones — but it is not what §6
+describes, and the difference is invisible from outside the code.
+
+| Spec | State | What it costs |
+|---|---|---|
+| §6.3.3 LLM segmentation when heuristic confidence < 0.6 | ⬜ absent | A resume whose headings the lexicon misses gets no second opinion |
+| §6.5.3 LLM claim extraction, one call per section | ⬜ absent | `subject_concepts` are regex hits, not read comprehension; no paraphrase |
+| §6.7 LLM probe ladder, batched 10 | ⬜ absent | Probes come from five hand-written families |
+| §6.4 step 4 embedding NN (cosine ≥ 0.86) | ⬜ absent | Needs a platform embedding service |
+
+- ⬜ **Decide whether this tier is deferred or rejected, and amend the spec to
+      match.** If rejected, §6.3.3, §6.5.3, §6.7 and §11's cost table all
+      describe a system nobody intends to build. A specification that documents
+      a design the code deliberately does not implement is the same class of
+      untruth this module exists to prevent.
+
+### 11.3 Parse quality, still open
+
+- ⬜ **The alias table is 271 entries; the spec seeds ~2,000** in a versioned
+      `packages/knowledge/ontology/aliases.yaml`. The ladder that consumes it is
+      finished and verified. This is the single biggest remaining lever on skill
+      recall against real resumes, and it is data entry rather than engineering.
+- ⬜ **`has_scope`, `has_method_detail`, `genericness` (§6.6).** Specificity is
+      three terms against the spec's five. The missing one that matters is
+      `genericness` — a cosine distance from a corpus of generic resume phrases,
+      which is what would let "Worked on various modules" score differently from
+      a real bullet of the same length.
+- ⬜ **`verifiability` sub-terms (§6.6).** The spec distinguishes a verified repo
+      (1.00), a URL (0.70), a publication (0.60) and a named organisation
+      (0.40). The code has link / quantifier / concept. Publications and named
+      orgs are detectable today; `linked_repo_verified` needs M03.
+- ⬜ **Claim embeddings.** §5's SQL declares `embedding VECTOR(1024)` with an
+      HNSW index, for dedup and M05 retrieval. Nothing writes one — so §3.2.4's
+      *"keep both spans linked to one claim group"* is a red flag rather than a
+      grouping, and M05 cannot retrieve claims by similarity.
+
+### 11.4 Screens thinner than the spec draws them
+
+- ⬜ **`PdfHighlightViewer` (§8.1, §8.3).** *"Click a claim → the original PDF
+      scrolls and highlights that exact bullet… a 4-hour feature that buys
+      enormous trust."*  `SourceHighlight` highlights the redacted TEXT, which
+      carries the same guarantee and none of the recognition. The `bbox` is
+      extracted, stored on every span, and rendered by nothing.
+- ⬜ **Screen 3 is four flat lists, not the project tree §2.3 draws.** The spec
+      shows each project as a card with its title, its dates, its tech chips
+      (`Tech: TensorFlow, OpenCV, Flask [+ add tech]`) and its own bullets.
+      Sections, bullets, skills and dates are each editable — but separately, so
+      a student fixing one mis-read project edits it in three places and never
+      sees it as one thing.
+- ⬜ **The per-section "I couldn't read this one" affordance (§2.3, §8.2).**
+      *"⚠ I couldn't read one section clearly (page 2, bottom). [Show me]
+      [It's not important]"*, and §8.2's ConfirmationEditor error column asks for
+      per-section retry. `parse_notes` says it once at the top of the page
+      instead, so it cannot be dismissed or jumped to.
+- ⬜ **Camera-scan path (§8.4).** *"Many students only have a printed resume.
+      Scan → OCR → same pipeline. Worth building; it removes a real blocker."*
+      OCR is installed and works end to end; the dropzone has no capture path.
+
+### 11.5 Operational
+
+- ⬜ **ClamAV (§6.1).** Reported honestly as `virus_scan: false` rather than
+      stubbed. Still a gap, and it sits on the path a stranger's file takes.
+- 🟡 **An object-storage bucket (FR-1.2).** The code speaks S3/R2/MinIO; there
+      is nothing to point it at, and `retention_class=transcripts_evaluations`
+      is set nowhere.
+- ⬜ **The restricted database role for the contact table (§6.4).** The column is
+      encrypted; the role that should be the second lock is a deployment concern
+      nobody owns yet.
+- ⬜ **AC-1.9 as a CI scan.** *"Zero PII in any model call — verified by a CI
+      scan of trace payloads."*  There is a unit test asserting redaction and no
+      scan of trace payloads, because there are no traces and no model calls. It
+      becomes real the day §11.2 does.
+- ⬜ **Async worker and `202 Accepted` (§7, §10).** §7 documents the upload as
+      returning 202; it returns 201 with a finished parse. §10's *"worker crashes
+      mid-parse → idempotency key resumes from the last completed stage"* has
+      nothing to resume. Correctly deferred while parsing is fast — but §7
+      currently describes an API that does not exist, and `/stream` replays a
+      finished parse rather than narrating a live one. Both are honest in the
+      code and wrong in the spec.
+
+### 11.6 The one that is not code
+
+- ⬜ **Real resumes for the golden set.** Unchanged, and still the largest single
+      item. The corpus is synthetic, written by the same hand as the parser, so
+      AC-1.3 / AC-1.4 / AC-1.5 read 1.000 as regression floors and are **not**
+      the acceptance measurement they are labelled as. Everything else in §11 is
+      judgement about a design; this is the only entry where a number on the
+      release checklist is not measuring what it says it measures.

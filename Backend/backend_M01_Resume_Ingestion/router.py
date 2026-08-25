@@ -35,6 +35,7 @@ what leaves this module, and a span is a thing that leaves this module.
 """
 
 import json
+import math
 import re
 import time
 import urllib.request
@@ -1421,6 +1422,63 @@ def quality_report(session: Session = Depends(get_db)):
         "retention": retention.retention_policy(),
         "failed": len(failed),
         "failures_by_code": dict(sorted(failures.items())),
+        # AC-1.6, evaluated rather than left in a column. `parse_ms` has been
+        # written since the first commit and nothing ever added it up, so the
+        # criterion was a number on every row and an answer on none — the same
+        # shape AC-1.7 was in. §11 budgets p95 at 22 s and §13 gates it at 25.
+        "timing": _timing(resumes),
+    }
+
+
+#: AC-1.6's target, in milliseconds. §13: "p95 end-to-end parse (2 pages, no
+#: OCR) ≤ 25 s". The OCR exclusion is the whole reason this is measured
+#: separately below: §11 budgets OCR alone at 15 s p95, so a corpus with
+#: scanned resumes in it would breach a target that was never about them.
+PARSE_P95_TARGET_MS = 25_000
+
+
+def _percentile(values: list[int], fraction: float) -> int:
+    """Nearest-rank percentile.
+
+    Not interpolated. On the handful of resumes a dev machine holds, an
+    interpolated p95 reports a duration no parse actually took — and the
+    question here is "did a real parse breach the budget", which wants a real
+    measurement.
+    """
+    if not values:
+        return 0
+    ordered = sorted(values)
+    rank = max(1, math.ceil(fraction * len(ordered)))
+    return ordered[min(rank, len(ordered)) - 1]
+
+
+def _timing(resumes: list[Resume]) -> dict[str, Any]:
+    """How long parsing actually takes, against §13's line.
+
+    Measured over the resumes AC-1.6 is about: parsed, and not read from an
+    image. Both exclusions are the criterion's own words, not a flattering
+    filter — and both counts are reported so nobody has to guess how much of
+    the corpus was set aside.
+    """
+    eligible = [r for r in resumes if r.parse_ms > 0 and not r.ocr_used]
+    durations = [r.parse_ms for r in eligible]
+    ocr = [r.parse_ms for r in resumes if r.parse_ms > 0 and r.ocr_used]
+
+    p95 = _percentile(durations, 0.95)
+    return {
+        "measured": len(durations),
+        "excluded_ocr": len(ocr),
+        "p50_ms": _percentile(durations, 0.50),
+        "p95_ms": p95,
+        "max_ms": max(durations) if durations else 0,
+        "target_ms": PARSE_P95_TARGET_MS,
+        # False on an empty corpus: nothing has breached a budget it has not
+        # been asked to meet, and reporting "over" for zero parses would make
+        # a fresh clone look broken.
+        "over_budget": bool(durations) and p95 > PARSE_P95_TARGET_MS,
+        # Reported alongside rather than folded in — §11 budgets OCR at 15 s of
+        # its own, so a slow scanned resume is expected rather than a breach.
+        "ocr_p95_ms": _percentile(ocr, 0.95),
     }
 
 

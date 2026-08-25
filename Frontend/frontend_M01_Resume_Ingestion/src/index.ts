@@ -22,6 +22,7 @@
 
 export { m01Routes } from "./routes";
 export { M01_NAV } from "./nav";
+export type { NavItem } from "./nav";
 export { AppShell } from "./ui/AppShell";
 export { SkillSet, SkillPanel, ScanSourceNote } from "./components/SkillSet";
 export { ClaimMap, BandSummary } from "./components/ClaimMap";

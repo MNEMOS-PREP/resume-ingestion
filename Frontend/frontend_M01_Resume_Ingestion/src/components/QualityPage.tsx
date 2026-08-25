@@ -121,6 +121,49 @@ export function QualityPage() {
         )}
       </Section>
 
+      <Section label="How long parsing takes" meta="AC-1.6">
+        {data.timing.measured === 0 ? (
+          <Panel tone="sunken" className="px-4 py-3">
+            <p className="text-sm text-ink-soft">
+              Nothing timed yet. AC-1.6 is measured over resumes that parsed and were not read
+              from an image, and there are none of those here.
+            </p>
+          </Panel>
+        ) : (
+          <Panel
+            className={`px-4 py-3.5 ${data.timing.over_budget ? "border-contested-line bg-contested-soft" : ""}`}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <Pill tone={data.timing.over_budget ? "contested" : "confirmed"}>
+                {data.timing.over_budget ? "over budget" : "within budget"}
+              </Pill>
+              <span className="provenance">
+                p95 {seconds(data.timing.p95_ms)} · target under{" "}
+                {seconds(data.timing.target_ms)}
+              </span>
+            </div>
+            <Rows>
+              <Field label="p50">{seconds(data.timing.p50_ms)}</Field>
+              <Field label="p95">{seconds(data.timing.p95_ms)}</Field>
+              <Field label="slowest">{seconds(data.timing.max_ms)}</Field>
+              <Field label="measured over">
+                {data.timing.measured} parse{data.timing.measured === 1 ? "" : "s"}
+              </Field>
+            </Rows>
+            {data.timing.excluded_ocr > 0 && (
+              <p className="mt-2.5 text-xs text-ink-soft">
+                {data.timing.excluded_ocr} OCR read
+                {data.timing.excluded_ocr === 1 ? "" : "s"} set aside, at p95{" "}
+                {seconds(data.timing.ocr_p95_ms)}. AC-1.6 excludes them in its own wording and §11
+                budgets OCR at 15 s separately &mdash; but the count is here, because a percentile
+                over a corpus with an unstated number of rows removed is not a number anybody can
+                check.
+              </p>
+            )}
+          </Panel>
+        )}
+      </Section>
+
       <Section label="The corpus">
         <Panel tone="sunken" className="px-4 py-3">
           <dl className="grid gap-x-6 gap-y-1.5 text-xs sm:grid-cols-2">
@@ -224,4 +267,16 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 /** A "no" that reads as a known gap rather than as a rendering failure. */
 function Honest({ ok, children }: { ok: boolean; children: React.ReactNode }) {
   return <span className={ok ? "text-confirmed" : "text-reported"}>{children}</span>;
+}
+
+/**
+ * Milliseconds as a duration a person reads at a glance.
+ *
+ * §13's target is in seconds and §11's budget table is in seconds, so a p95
+ * rendered as "18420 ms" makes the reader do the conversion every time they
+ * check the one thing this section exists to answer.
+ */
+function seconds(ms: number): string {
+  if (ms < 1000) return `${ms} ms`;
+  return `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)} s`;
 }
