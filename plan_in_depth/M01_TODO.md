@@ -76,14 +76,14 @@ need it, and apply the penalty only to those. Roughly twenty lines in
 
 | | |
 |---|---|
-| Backend tests passing | **245** (offline, no API key, no socket) |
+| Backend tests passing | **260** (offline, no API key, no socket) |
 | Release gates (§13) | **12 gate tests pass** — AC-1.1 (paste + upload), AC-1.2, AC-1.6, AC-1.9, the two contract gates, and AC-1.3/1.4/1.5 as regression floors |
 | FRs met | **19 fully · 1 partially · 0 missing** |
 | §7 API surface | **31 routes · every one reachable from a screen**, enforced at `-m gate` |
 | Completion | **~90%** of the written spec, and the last 10% is not evenly spread — see §11 |
 
 *Audited 2026-08-25 against the spec section by section, verifying in code
-rather than from this file. `pytest` 245 passed · `pytest -m gate` 12 passed ·
+rather than from this file. `pytest` 260 passed · `pytest -m gate` 12 passed ·
 `ruff check` clean · `tsc --noEmit` clean · `npm run build` clean ·
 `research/score_golden.py` 1.000 / 1.000 / 1.000.*
 
@@ -457,25 +457,39 @@ numerator at all. That is not "below target"; it is unmeasurable.
       is down.
 - ⬜ **`POST …/claims/{cid}/drill`** once M06 answers. Blocked, correctly.
 
-### 11.2 The whole semantic tier is absent
+### 11.2 The semantic tier — probes landed 2026-08-25, the rest is open
 
-The spec's pipeline is deterministic-first with an LLM layer on top. Only the
-first half exists. This is a deliberate and well-argued position — `claims.py`
+The spec's pipeline is deterministic-first with an LLM layer on top. **§6.7 now
+exists**; §6.3.3, §6.5.3 and §6.4 step 4 still do not.
+
+- ✅ **§6.7 probe generation.** `llm.py` + `probes.py`, on `ai_core.models`
+      (Platform_Core v0.8.0 — one roster naming every model all nineteen
+      modules call). `openai/gpt-oss-120b` via Groq, four claims concurrently,
+      ~4.9 s for a five-bullet resume inside FR-1.18's 25 s. The deterministic
+      ladder is the FLOOR: no key, a timeout, a 429, malformed JSON or a probe
+      that just restates the bullet all leave the student with the template
+      questions, and `generated_by` says which wrote each one. 15 tests, none
+      opening a socket.
+
+Still absent, and the rest of this section stands: This is a deliberate and well-argued position — `claims.py`
 opens with three reasons and they are good ones — but it is not what §6
 describes, and the difference is invisible from outside the code.
 
 | Spec | State | What it costs |
 |---|---|---|
 | §6.3.3 LLM segmentation when heuristic confidence < 0.6 | ⬜ absent | A resume whose headings the lexicon misses gets no second opinion |
-| §6.5.3 LLM claim extraction, one call per section | ⬜ absent | `subject_concepts` are regex hits, not read comprehension; no paraphrase |
-| §6.7 LLM probe ladder, batched 10 | ⬜ absent | Probes come from five hand-written families |
+| §6.5.3 LLM claim extraction, one call per section | ⬜ absent | `subject_concepts` are regex hits, not read comprehension; no paraphrase. **This is what would fix the quantifier gap below** |
+| §6.7 LLM probe ladder | ✅ **done** | — |
 | §6.4 step 4 embedding NN (cosine ≥ 0.86) | ⬜ absent | Needs a platform embedding service |
 
-- ⬜ **Decide whether this tier is deferred or rejected, and amend the spec to
-      match.** If rejected, §6.3.3, §6.5.3, §6.7 and §11's cost table all
-      describe a system nobody intends to build. A specification that documents
-      a design the code deliberately does not implement is the same class of
-      untruth this module exists to prevent.
+- ⬜ **The quantifier regex misses most real ML numbers.** `macro-F1: 0.897`,
+      `F1 of 0.897` and `72-hour` all extract as nothing, so a bullet whose
+      headline IS a number is told "there is no number in it" and its depth-2
+      probe falls back to the generic trade-off question. Bare decimals and
+      hyphenated units. Deterministic fix, and the cheapest one left.
+- ⬜ **§6.5.3 would subsume it.** A model reading the bullet finds the number a
+      regex cannot enumerate. Worth deciding whether to widen the regex, do
+      §6.5.3, or both — the regex is the floor either way.
 
 ### 11.3 Parse quality, still open
 

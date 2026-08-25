@@ -2,21 +2,76 @@
   M01 - RESUME INGESTION & CLAIM EXTRACTION   ·   REQUIRED KEYS
 ===============================================================================
 
-  None. This module needs no API key to run, and holds none.
+  Everything here is OPTIONAL. The module runs, parses, scores and serves every
+  screen with none of it set. What a key buys is the QUALITY of one stage, and
+  its absence is reported at GET /v1/capabilities rather than guessed at.
 
-Everything it does today is deterministic: a lexicon scan over the text, a
-resolve call to M04, and arithmetic. There is no model in the path, so there
-is nothing to configure and nothing to leak.
+  Copy this file to keys.txt (gitignored) and fill in what you have.
 
-That changes at the first LLM stage in the spec (§6.2 extraction). When it
-does, copy the shape from a module that already has keys - M15's
-required_keys.txt - rather than inventing a second convention: one provider
-list, tried in order, and the module still runs with none of them set.
+-------------------------------------------------------------------------------
+  GENERATION (§6.7, FR-1.10)
+-------------------------------------------------------------------------------
 
-The one environment variable this module reads:
+  GROQ_API_KEYS     One or more Groq keys, comma-separated.
 
-  M04_BASE_URL      point at a running M04 without editing module.json
+                    With it: interview questions are written about YOUR bullet -
+                    "How does the FAISS-based clustering identify duplicates
+                    within the 72-hour window?"
+
+                    Without it: the deterministic ladder in claims.py - five
+                    phrasing families, four depths. Real questions, and the same
+                    ones for any two claims of the same kind.
+
+                    A POOL, not a key. Groq rate-limits per key, so several keys
+                    are several times the throughput; probe generation runs four
+                    claims wide inside one ingest.
+
+                    Get one at https://console.groq.com/keys
+
+  NVIDIA_API_KEYS   Same shape, and the router prefers whichever is configured.
+                    Known not to work from some networks: TCP 443 connects and
+                    the request then hangs to timeout. Left here because it is
+                    one line away where it does work.
+
+  Which MODEL each of these calls is not configured here. `ai_core.models` is
+  the platform roster: one file naming every model all nineteen modules call, so
+  a deprecation is one edit rather than nineteen. Override without editing it:
+
+  AI_MODEL_GENERATION   the generation tier, platform-wide
+  M01_MODEL_PROBES      just this module's probe call
+  M01_LLM_CONCURRENCY   claims in flight at once (default 4)
+  M01_LLM_TIMEOUT       seconds per call (default 20)
+
+-------------------------------------------------------------------------------
+  PII AT REST (FR-1.17)
+-------------------------------------------------------------------------------
+
+  M01_PII_KEY       A Fernet key. Encrypts the contact block column.
+
+                    Without it the contact row is stored in the clear, and
+                    GET /v1/quality reports pii_encrypted_at_rest: false rather
+                    than staying quiet about it.
+
+                    Generate:
+                      python -c "from cryptography.fernet import Fernet; \
+                                 print(Fernet.generate_key().decode())"
+
+-------------------------------------------------------------------------------
+  STORAGE (FR-1.2, §6.1)
+-------------------------------------------------------------------------------
+
+  M01_OBJECT_STORE  An S3/R2/MinIO URL. Falls back to a local content-addressed
+                    tree, which is fine for development and is not durable.
+
+-------------------------------------------------------------------------------
+  EVERYTHING ELSE
+-------------------------------------------------------------------------------
+
+  M04_BASE_URL      Point at a running M04 without editing module.json.
                     default: http://127.0.0.1:8104
 
-  BACKEND_PORT      override the reserved port from PORTS.txt
+  BACKEND_PORT      Override the reserved port from PORTS.txt.
                     default: 8101
+
+  M01_RETENTION_DAYS  §15 decision 3's period, pending the ethics sign-off.
+                      default: 1825 (enrollment + 1 year)

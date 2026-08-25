@@ -152,3 +152,26 @@ def client_fixture(session, m04):
     app.dependency_overrides[get_db] = override_get_db
     yield TestClient(app)
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def _no_language_model(monkeypatch):
+    """The suite runs offline. This is what makes that true rather than likely.
+
+    `llm.get_llm()` reads `keys.txt` from the repo root and from `Backend/`, so
+    a developer who has configured a key would otherwise have every ingest test
+    make three or four real HTTP calls — slower, non-deterministic, billable,
+    and green or red depending on whose laptop it is. The platform rule is that
+    no test opens a socket.
+
+    Pinned to `NullLLM` rather than by unsetting the environment, because the
+    environment is not the only way a client can arrive: `set_llm` exists, and a
+    test that installs a fake must not have it silently replaced by a real one.
+    A test that WANTS a model installs a fake through `set_llm` itself.
+    """
+    from backend_M01_Resume_Ingestion import llm
+
+    llm.set_llm(llm.NullLLM(reason="disabled for tests"))
+    monkeypatch.setattr(llm, "load_keys", lambda **_: [])
+    yield
+    llm.set_llm(None)

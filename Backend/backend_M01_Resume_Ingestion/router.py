@@ -66,11 +66,13 @@ from backend_M01_Resume_Ingestion import (
     config,
     crypto,
     documents,
+    llm,
     normalise,
     objectstore,
     retention,
     safety,
 )
+from backend_M01_Resume_Ingestion import probes as probe_gen
 from backend_M01_Resume_Ingestion import skills as skills_mod
 from backend_M01_Resume_Ingestion.models import (
     Resume,
@@ -219,6 +221,10 @@ def capabilities() -> dict[str, Any]:
             ),
         },
         "ocr": documents.ocr_available(),
+        # §6.7's model tier. Reported for the same reason `accepts` is: a
+        # student whose questions read as generic should be able to find out
+        # that generation is off, rather than concluding the product is thin.
+        "generation": llm.status(),
         "max_bytes": config.MAX_UPLOAD_BYTES,
         "max_pages": config.MAX_PAGES,
         "parser_version": config.PARSER_VERSION,
@@ -446,6 +452,14 @@ def _ingest(
     # gate; this is the code that makes it true rather than hoped for.
     claim_models = verify_spans(redacted, claim_models)
 
+    # §6.7's model tier, over the top of the ladder that already ran.
+    #
+    # After `verify_spans` on purpose: a claim whose span did not resolve was
+    # already dropped, so no model time is spent writing questions about a
+    # bullet that will not be stored. With no key this is a no-op and every
+    # claim keeps the deterministic probes it already has.
+    probes_generated = probe_gen.enrich(claim_models, concepts_by_label=concepts_by_label)
+
     flags = find_red_flags(
         redacted,
         claim_models,
@@ -545,6 +559,10 @@ def _ingest(
         sections=len(resume.sections),
         claims=len(resume.claims),
         probes=sum(len(c["probes"]) for c in resume.claims),
+        # How many claims a model wrote questions for. Zero is the
+        # normal answer with no key, and telling those two apart is
+        # what makes "why are my questions generic?" answerable.
+        probes_generated=probes_generated,
         red_flags=len(resume.red_flags),
         skills_found=len(resume.parsed_skills),
         skills_mapped=len(resume.resolved_concepts),

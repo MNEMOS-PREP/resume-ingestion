@@ -11,7 +11,7 @@ dependencies = [
     "fastapi>=0.115",
     "sqlmodel>=0.0.22",
     "uvicorn[standard]>=0.30",
-    "ai-core @ git+https://github.com/MNEMOS-PREP/Platform_Core@v0.6.0#subdirectory=python",
+    "ai-core @ git+https://github.com/MNEMOS-PREP/Platform_Core@v0.8.0#subdirectory=python",
     # FR-1.1 / FR-1.3 / FR-1.4. Not optional: the spec requires PDF and DOCX,
     # and a deployment without them can only accept pasted text - which works,
     # and which `GET /v1/capabilities` would then have to report as the only

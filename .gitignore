@@ -45,3 +45,9 @@ Thumbs.db
 # stored" is a property of the object store, never a reason to version it.
 # Override the location with M01_BLOB_ROOT.
 blobs/
+
+# Credentials. `required_keys.txt` is committed and holds the SHAPE with dummy
+# values; this holds the real ones and must never be. Added the day M01 grew
+# its first model call.
+keys.txt
+.env

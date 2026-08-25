@@ -37,6 +37,7 @@ _SAFE_KEYS = frozenset(
         "sections",
         "claims",
         "probes",
+        "probes_generated",
         "red_flags",
         "skills_found",
         "skills_mapped",
