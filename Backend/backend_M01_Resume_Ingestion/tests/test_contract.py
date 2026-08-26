@@ -138,3 +138,31 @@ def test_an_alias_is_only_ever_a_second_spelling():
         base = path.split("?")[0].replace("{id}", "{resume_id}")
         assert (method, base) in served, f"{alias} points at {target}, which is not served"
         assert _client_exists_for(base, api), f"{alias} points at {target}, which has no client"
+
+
+@pytest.mark.gate
+def test_every_raw_fetch_in_the_client_sends_identity():
+    """A raw `fetch` bypasses `@ai/core`, and therefore bypasses the headers.
+
+    `setIdentityHeaders` puts identity on core's wrapper. `api.ts` has two
+    helpers that deliberately do NOT use that wrapper — PATCH, which core does
+    not carry, and multipart upload, where setting `Content-Type` yourself is
+    actively wrong. Both were invisible to the change that added identity, so
+    the backend started answering 403 "Not signed in." to every upload and
+    every correction while the paste path worked perfectly.
+
+    That shape will recur: the next verb core does not carry gets written the
+    same way. So the rule is checked rather than remembered — a `fetch(` in
+    this file must mention `identityHeaders`.
+    """
+    source = _source("api.ts")
+
+    # Body of each `fetch(...)` call, roughly: up to the line that closes it.
+    calls = re.findall(r"fetch\((.*?)\n  \}\)", source, re.DOTALL)
+    assert calls, "no raw fetch calls found — the regex or the file layout changed"
+
+    naked = [call for call in calls if "identityHeaders" not in call]
+    assert not naked, (
+        "raw fetch without identity headers — the backend will answer 403:\n  "
+        + "\n  ".join(call.strip()[:90] for call in naked)
+    )

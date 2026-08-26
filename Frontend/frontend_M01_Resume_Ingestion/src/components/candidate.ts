@@ -58,8 +58,12 @@ export function setCandidateId(next: string): void {
  * one name, is refused in production, and the swap for a real session is one
  * call in this file.
  */
+export function identityHeaders(): Record<string, string> {
+  return { "X-Role": "student", "X-Candidate-Id": current };
+}
+
 export function publishIdentity(): void {
-  setIdentityHeaders({ "X-Role": "student", "X-Candidate-Id": current });
+  setIdentityHeaders(identityHeaders());
 }
 
 // At module load, before any screen has rendered or fetched.

@@ -30,6 +30,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@ai/core";
+
+import { identityHeaders } from "./components/candidate";
 import type {
   Capabilities,
   ClaimListing,
@@ -103,7 +105,15 @@ export class IntakeError extends Error {
 async function patch<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(`${BASE}${path}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    // `identityHeaders()` explicitly, because this is a RAW fetch.
+    //
+    // `setIdentityHeaders` puts them on `@ai/core`'s wrapper, and the two
+    // helpers in this file exist precisely because they do not go through it.
+    // So they did not get the header, and the backend — which now refuses
+    // candidate-scoped data without one — answered 403 "Not signed in." on
+    // every upload while the paste path, which does use `api.post`, worked
+    // perfectly. The screen offered "paste the text instead" and was right.
+    headers: { "Content-Type": "application/json", ...identityHeaders() },
     body: JSON.stringify(body),
   });
   if (!response.ok) throw new Error(`${response.status}: ${response.statusText}`);
@@ -116,8 +126,13 @@ async function upload(candidateId: string, file: File): Promise<Resume> {
   form.append("file", file);
 
   // No Content-Type header on purpose — the browser sets it, with the
-  // multipart boundary that the server needs to split the parts.
-  const response = await fetch(`${BASE}/v1/resumes`, { method: "POST", body: form });
+  // multipart boundary that the server needs to split the parts. Identity is
+  // not optional though; see the note in `patch`.
+  const response = await fetch(`${BASE}/v1/resumes`, {
+    method: "POST",
+    headers: identityHeaders(),
+    body: form,
+  });
 
   if (!response.ok) {
     let detail: IntakeErrorDetail = {
