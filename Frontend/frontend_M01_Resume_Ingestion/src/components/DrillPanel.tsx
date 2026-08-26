@@ -24,6 +24,8 @@
  * do teaches them it is unfinished, which is true and recoverable.
  */
 
+import { useEffect } from "react";
+
 import { useStartDrill } from "../api";
 import { Btn, Panel, SkeletonRows } from "../ui/primitives";
 import type { DrillHandoff } from "../types";
@@ -39,12 +41,23 @@ export function DrillPanel({
 }) {
   const drill = useStartDrill(resumeId);
 
-  // Started on mount: the student already pressed the button that rendered
-  // this, and asking them to press a second one is a step with no decision in
-  // it. `useStartDrill` is a mutation so nothing else can trigger it.
-  if (drill.isIdle) drill.mutate(claimId);
+  // Started on mount, from an effect.
+  //
+  // This was `if (drill.isIdle) drill.mutate(claimId)` in the render body — a
+  // side effect during render, which React is allowed to discard. Under
+  // StrictMode's double render the first call was thrown away with the
+  // discarded render and the second saw `isIdle` already false, so nothing was
+  // ever sent: the panel showed its skeleton and sat there. It looked like a
+  // slow network and was a mutation that never left.
+  //
+  // The student already pressed the button that mounted this, so it starts by
+  // itself; asking them to press a second one is a step with no decision in it.
+  const { mutate } = drill;
+  useEffect(() => {
+    mutate(claimId);
+  }, [mutate, claimId]);
 
-  if (drill.isPending) return <SkeletonRows rows={3} />;
+  if (drill.isPending || drill.isIdle) return <SkeletonRows rows={3} />;
 
   if (drill.isError || !drill.data) {
     return (

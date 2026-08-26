@@ -69,18 +69,36 @@ export function ResumePage() {
   const showConfirmation = reviewing || !data.confirmed;
 
   if (showConfirmation) {
+    // The same two-column shape as the workspace, for the same reason.
+    //
+    // This screen used to be a `max-w-5xl` reading column with the document in
+    // a 22rem aside capped at 28rem tall. On a real monitor that put a
+    // sixty-line resume in a box showing fifteen of them, with the rest of the
+    // window empty on both sides — the student is asked to check what we read
+    // while most of what we read is behind a scrollbar in the smallest element
+    // on the page.
+    //
+    // §2.3 calls this "the single most important UX decision in this module"
+    // and budgets it at fifteen seconds. Fifteen seconds is not enough time to
+    // scroll a panel, so the panel stops being one: it fills the height, and
+    // the editor scrolls beside it.
     return (
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto grid w-full max-w-5xl gap-8 px-5 py-8 md:px-8 md:py-10 lg:grid-cols-[minmax(0,1fr)_22rem]">
-          <div className="min-w-0">
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-3xl px-5 py-8 md:px-8 md:py-10">
             <ConfirmationEditor resume={data} onConfirmed={() => setReviewing(false)} />
           </div>
-          <aside className="min-w-0">
-            <p className="rule-label mb-2">What we read</p>
-            <SourceHighlight text={data.redacted_text} span={null} />
-            <RedactionNote />
-          </aside>
         </div>
+
+        <aside className="flex max-h-[60vh] shrink-0 flex-col border-t border-line bg-surface lg:h-full lg:max-h-none lg:w-[30rem] lg:border-l lg:border-t-0">
+          <p className="rule-label shrink-0 px-4 pt-4">What we read</p>
+          <div className="min-h-0 flex-1 px-4 py-2">
+            <SourceHighlight text={data.redacted_text} span={null} fill />
+          </div>
+          <div className="shrink-0 px-4 pb-4">
+            <RedactionNote />
+          </div>
+        </aside>
       </div>
     );
   }

@@ -175,7 +175,11 @@ function ParseNotes({ resume }: { resume: Resume }) {
 /** One section, relabelable in place (FR-1.11). */
 function SectionRow({ resume, section }: { resume: Resume; section: ResumeSection }) {
   const correct = useCorrectSection(resume.id);
-  const preview = section.span.text.trim().split("\n").slice(0, 2).join(" · ");
+  // Six lines, not two. The student is being asked "is this the right label
+  // for this block?", and two lines of a SKILLS section is one line of
+  // libraries — not enough of the block to judge it, on the screen §2.3
+  // calls the most important in the module.
+  const preview = section.span.text.trim().split("\n").slice(0, 6).join(" · ");
   const lowConfidence = section.confidence < 0.5;
 
   return (
@@ -211,7 +215,7 @@ function SectionRow({ resume, section }: { resume: Resume; section: ResumeSectio
         </span>
       </div>
 
-      <p className="mt-2 line-clamp-2 text-sm text-ink-soft">{preview || "(empty)"}</p>
+      <p className="mt-2 line-clamp-3 text-sm text-ink-soft">{preview || "(empty)"}</p>
     </Panel>
   );
 }
