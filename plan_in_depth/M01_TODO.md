@@ -622,14 +622,16 @@ describes, and the difference is invisible from outside the code.
 | §6.7 LLM probe ladder | ✅ **done** | — |
 | §6.4 step 4 embedding NN (cosine ≥ 0.86) | ⬜ absent | Needs a platform embedding service |
 
-- ⬜ **The quantifier regex misses most real ML numbers.** `macro-F1: 0.897`,
-      `F1 of 0.897` and `72-hour` all extract as nothing, so a bullet whose
-      headline IS a number is told "there is no number in it" and its depth-2
-      probe falls back to the generic trade-off question. Bare decimals and
-      hyphenated units. Deterministic fix, and the cheapest one left.
-- ⬜ **§6.5.3 would subsume it.** A model reading the bullet finds the number a
-      regex cannot enumerate. Worth deciding whether to widen the regex, do
-      §6.5.3, or both — the regex is the floor either way.
+- ✅ **The quantifier regex (fixed 2026-08-25).** `macro-F1: 0.897`, `AUC of
+      0.81` and `72-hour` all extract now — a metric name makes a bare number a
+      measurement, and the value/unit separator may be a hyphen. It was a
+      SCORING bug, not a copy one: `specificity` and `verifiability` both read
+      the quantifier list, so a bullet whose measurement we could not see was
+      banded a whole level worse and could take the "one thing to fix first"
+      slot from the claim that deserved it.
+- ⬜ **§6.5.3 would still subsume it.** A model reading the bullet finds numbers
+      no regex can enumerate ahead of time. The regex is the floor either way,
+      and it is now a floor worth having.
 
 ### 11.3 Parse quality, still open
 
