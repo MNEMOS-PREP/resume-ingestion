@@ -334,6 +334,32 @@ def scan_prose(text: str, concepts: list[dict[str, Any]]) -> set[str]:
     return found
 
 
+def _contains_phrase(haystack: str, needle: str) -> bool:
+    """Does `needle` appear in `haystack` as whole words?
+
+    A raw `needle in haystack` was the test here, and it deletes a student's
+    skills. `normalise_alias` strips punctuation and lowercases, so "SQL"
+    becomes `sql` — and `"sql" in "nosql"` is True. The moment SQL resolves,
+    NoSQL is dropped from the resume as redundant, and the student is told
+    they listed one database when they listed two.
+
+    Short aliases make it worse in proportion to how short they are: "C++"
+    normalises to the single letter `c`, which is inside almost every phrase in
+    English, and "R" and "Go" likewise. The offline table holds five multi-word
+    concepts so nothing short has ever resolved locally — but M04's real
+    ontology is not the offline table, and this runs against M04.
+
+    Found in M02 on 2026-08-27, where splitting "Java/Python/C++" put a
+    one-letter alias into `resolved` for the first time and a whole requirement
+    vanished from the response with no error anywhere. Same function, copied.
+    """
+    hay = haystack.split()
+    need = needle.split()
+    if not need or len(need) > len(hay):
+        return False
+    return any(hay[index : index + len(need)] == need for index in range(len(hay) - len(need) + 1))
+
+
 def drop_redundant(unresolved: list[str], resolved: list[str]) -> list[str]:
     """Remove a conjunction phrase once its parts are carrying the meaning.
 
@@ -356,7 +382,7 @@ def drop_redundant(unresolved: list[str], resolved: list[str]) -> list[str]:
     for label in unresolved:
         key = normalise_alias(label)
 
-        if any(r and r != key and r in key for r in resolved_keys):
+        if any(r and r != key and _contains_phrase(key, r) for r in resolved_keys):
             continue
 
         parts = [normalise_alias(p) for p in _split_conjunctions(label)]

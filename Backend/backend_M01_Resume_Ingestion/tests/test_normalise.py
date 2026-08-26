@@ -181,3 +181,53 @@ def test_an_unrecognised_skill_is_still_kept(client, m04_up):
     assert "Figma" in data["parsed_skills"]
     assert "Figma" in data["unresolved_skills"]
     assert "Figma" not in data["canonical_skills"]
+
+
+# ---------------------------------------------------------------------------
+#  `drop_redundant` compared aliases with a raw substring test
+# ---------------------------------------------------------------------------
+
+
+def test_a_shorter_skill_name_does_not_delete_a_longer_one():
+    """NoSQL is not SQL, and the student listed both.
+
+    `drop_redundant` removes a phrase once its parts carry the meaning, which
+    is right — "Docker and Kubernetes" beside "Docker" and "Kubernetes" reads
+    as a parser stutter. It decided that with `needle in haystack` on
+    normalised aliases, and `normalise_alias` lowercases and strips
+    punctuation: "SQL" becomes `sql`, and `"sql" in "nosql"` is True.
+
+    So the moment SQL resolved, NoSQL was dropped from the student's resume as
+    redundant — and the student is told they listed one database when they
+    listed two. Nothing errors; the skill is simply not there.
+    """
+    from backend_M01_Resume_Ingestion.extract import drop_redundant
+
+    assert drop_redundant(["NoSQL"], ["SQL"]) == ["NoSQL"]
+
+
+def test_a_one_letter_alias_does_not_delete_everything():
+    """ "C++" normalises to the single letter `c`.
+
+    Which is inside almost every phrase in English, so resolving C++ emptied
+    the unresolved list. "R" and "Go" are the same shape of problem. Nothing
+    caught it locally because the offline table holds five multi-word concepts
+    and nothing short had ever resolved — but this runs against M04, whose
+    ontology is not the offline table.
+    """
+    from backend_M01_Resume_Ingestion.extract import drop_redundant
+
+    kept = drop_redundant(["CI/CD pipelines", "Container orchestration"], ["C++"])
+
+    assert kept == ["CI/CD pipelines", "Container orchestration"]
+
+
+def test_a_phrase_whose_words_resolved_is_still_dropped():
+    """The behaviour the function exists for has to survive the fix.
+
+    "SQL and indexing" next to a resolved "SQL" is the parser stutter this was
+    written to remove, and a whole-word test still removes it.
+    """
+    from backend_M01_Resume_Ingestion.extract import drop_redundant
+
+    assert drop_redundant(["SQL and indexing"], ["SQL"]) == []
