@@ -126,14 +126,14 @@ need it, and apply the penalty only to those. Roughly twenty lines in
 
 | | |
 |---|---|
-| Backend tests passing | **295** (offline, no API key, no socket) |
-| Release gates (§13) | **24 gate tests pass** — AC-1.1 (paste + upload), AC-1.2, AC-1.6, AC-1.9, the two contract gates, and AC-1.3/1.4/1.5 as regression floors |
+| Backend tests passing | **296** (offline, no API key, no socket) |
+| Release gates (§13) | **25 gate tests pass** — AC-1.1 (paste + upload), AC-1.2, AC-1.6, AC-1.9, the two contract gates, and AC-1.3/1.4/1.5 as regression floors |
 | FRs met | **19 fully · 1 partially · 0 missing** |
 | §7 API surface | **32 routes · every one reachable from a screen**, enforced at `-m gate` |
 | Completion | **~90%** of the written spec, and the last 10% is not evenly spread — see §11 |
 
 *Audited 2026-08-25 against the spec section by section, verifying in code
-rather than from this file. `pytest` 295 passed · `pytest -m gate` 12 passed ·
+rather than from this file. `pytest` 296 passed · `pytest -m gate` 25 passed ·
 `ruff check` clean · `tsc --noEmit` clean · `npm run build` clean ·
 `research/score_golden.py` 1.000 / 1.000 / 1.000.*
 
