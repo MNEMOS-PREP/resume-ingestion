@@ -27,6 +27,56 @@ platform's contracts — character offsets, per-fact provenance, permanent
 evidence — are more demanding than general-purpose tools assume, so integration
 usually costs more than reimplementing the one idea we actually wanted.
 
+### ⬜ Resume ↔ JD coverage at upload — the cold-start screen M02 cannot show
+
+Ask for a JD alongside the resume, then say which requirements the resume
+actually speaks to. Optional, always: M02 §2.3 door 3 ("just pick a role") is
+mandatory and requiring a JD here would break it from the other end.
+
+**Why it belongs to M01 and not to M02.** M02 Screen 2 already draws
+requirement-by-requirement coverage — but every bar on it is driven by θ from
+M04. On day one a new student has no θ, so **every row reads "not measured"**,
+and the screen is emptiest for exactly the user forming their first impression.
+Resume↔JD coverage needs no interview history at all. Both sides are already
+normalised through M04's alias table, so it is a join over data both modules
+hold on the day the student arrives.
+
+```
+for each JD requirement r:
+    claims = M01 claims whose subject_concepts ∩ r.concept_ids ≠ ∅
+    state  = "unclaimed"  if not claims          # the JD asks; the resume is silent
+             "risky"      if max(band) == risky  # claimed, and hard to defend
+             "vague"      if max(band) == vague
+             "supported"  if any band == strong
+    evidence = the claim's own span → highlights in the document pane
+```
+
+Three states, three different actions, and **none of them is "add keywords"**:
+
+- **unclaimed** — *the JD asks for DBMS and your resume never mentions a
+  database. If you have used one, say so.* The only honest resume advice in the
+  product, and the exact opposite of keyword stuffing.
+- **risky** — you claimed it and the claim is the kind a panel attacks →
+  the defend drill, which is AC-1.8's numerator.
+- **supported** — specific, checkable, yours.
+
+**The line that keeps it inside the module's own rules:**
+
+> Your resume covers 6 of 8 requirements. Covering is not defending — 4 of those
+> 6 are claims we would expect a panel to attack. Here is the 20-minute mock
+> that finds out which.
+
+**The trap, stated so it is not walked into.** A resume bullet is a *claim*;
+mastery is *evidence*. This screen measures claim coverage and must be labelled
+as such. The moment it says "you are 75% ready for this role" it has asserted an
+ability estimate from a document the student wrote about themselves, which is
+the one inference M01 exists to refuse. It reads as claim coverage until θ
+exists, and then M02's view supersedes it.
+
+**Needs:** M02's `RequirementSet` (already a contract), and a `POST` that takes
+a JD alongside the resume or attaches one after. No new parsing, no new model
+call, no new score.
+
 ### Scouting verdict: pdf-inspector — **do not adopt, take two ideas**
 
 From reading [firecrawl/pdf-inspector](https://github.com/firecrawl/pdf-inspector)
@@ -653,3 +703,74 @@ describes, and the difference is invisible from outside the code.
       the acceptance measurement they are labelled as. Everything else in §11 is
       judgement about a design; this is the only entry where a number on the
       release checklist is not measuring what it says it measures.
+
+### 11.7 ✅ The Claim Map became a workspace (2026-08-25)
+
+Rebuilt against a competitor read-through (Resume Worded). Its **layout** is
+better than what §2.3 draws and its **content** is exactly what §2.3 forbids, so
+the layout was taken and the scoring ring was not.
+
+**What was wrong.** §2.3 draws five screens and four of them genuinely are
+screens — upload, the narrated parse, the confirmation pass, the no-resume path
+each ask for one thing and get out of the way. The Claim Map is not a screen. It
+is a place a student *works*, moving between a claim, the questions it invites,
+and the line in their own document it came from. Rendering it as a reading
+column made the document a 22rem panel beside the map and, below `lg`, under it
+— so §8.3's *"click a claim → the original highlights that exact bullet"* fired
+somewhere the student was not looking. **The feature worked perfectly and was
+invisible**, which is the same failure the focus rings had before they were
+fixed in `theme.css`.
+
+- ✅ **Two layouts, chosen by route.** `AppShell` matches `/resumes/:id` exactly
+      and gives it the viewport; everything else keeps the reading column. On
+      the path rather than through a context because the shell wraps `<Routes>`
+      and an effect would render the wrong layout for one frame on the module's
+      most important screen. `lg:` only — below that the panes stack, per §8.4.
+- ✅ **Three panes** (`ResumeWorkspace`): rail · claims · document, each with
+      its own scrollbar. The document is now permanently in view, which is the
+      whole point.
+- ✅ **The rail is a navigator, not a second list.** Counts, filters, and the
+      *"one thing to fix first"* card — which finally sits somewhere that does
+      not scroll away exactly when the student starts reading what it points at.
+- ✅ **Group by risk OR by section.** Risk answers *"what do I fix first"*;
+      section answers *"how does my Projects block hold up"*, which is the
+      student's own model of their document. Free — claims already carry
+      `section_id`. `SECTION_STAKE` says what an interviewer does with each
+      section, and the brief counts the probes already generated for it, so
+      *"what would they ask me about this section"* is answered from data the
+      module already had.
+- ✅ **`SourceHighlight` takes a LIST of spans.** `RedFlag.spans` has always
+      been plural — a chronology conflict is a statement about two dates and
+      lighting one of them explains nothing. Overlapping ranges are merged, so
+      two highlights sharing a character cannot render nested `<mark>`s and a
+      third, darker band that means nothing.
+- ✅ **`Btn` stops eating `className`.** It spread props and *then* set
+      className, silently discarding whatever a caller passed.
+- ✅ **`sections.ts` owns the section labels.** The confirmation editor had its
+      own copy; three screens name these now, and the bands' own rule applies —
+      a second definition is how one screen says "Extras" while the one beside
+      it says "Extra-curricular".
+- ✅ **The three meta screens moved out of the diagnosis.** `how this was read`
+      / `what changed` / `who can see this` were ghost buttons above the claim
+      list, competing with it for the first thing a student looks at. They are
+      questions *about the document*, so they sit under it.
+
+**Still open, and unchanged by this:** the `bbox` overlay in §11.4 (the highlight
+is still drawn over `redacted_text`, deliberately — FR-1.17 keeps the unredacted
+original inside the module), Screen 3's project tree, the per-section "I could
+not read this one" affordance, and the camera-scan path.
+
+**Not taken from the reference, on purpose:**
+
+- ⛔ **The `85 OVERALL` ring.** §2.3's microcopy table forbids `ATS score: 62`
+      outright and §15 decision 1 recommends there is never a total on this
+      screen. A single number is the most memorable thing on a page and the
+      least defensible — the same argument M15 §6.10 makes for killing
+      *"62% ready"*. It is also the moment the module becomes a commodity ATS
+      checker with a hundred competitors instead of the thing that tells a
+      student what a panel will attack.
+- ⛔ **`Unlock full report` / locked rows.** Gating a student's own diagnostic
+      breaks the disclosure rule that a student always sees everything held
+      about them, and in a placement-cell deployment it is indefensible.
+- ⛔ **`Mark as Fixed`.** M01 has `Rewrite it` and `Edit the bullet`, which
+      change the document rather than the checkbox beside it.

@@ -79,6 +79,7 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 export function Btn({
   variant = "secondary",
   size = "md",
+  className = "",
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "ghost";
@@ -92,7 +93,13 @@ export function Btn({
     ghost: "text-ink-soft hover:bg-surface-sunken hover:text-ink",
   };
   const sizes = { sm: "px-2.5 py-1 text-xs", md: "px-3.5 py-1.5 text-sm" };
-  return <button {...props} className={`${base} ${variants[variant]} ${sizes[size]}`} />;
+  /* `className` is destructured and appended rather than left in `props`,
+     because spreading props and THEN setting className silently discards
+     whatever the caller passed - which reads as "the utility class did not
+     work" rather than "the component ate it". */
+  return (
+    <button {...props} className={`${base} ${variants[variant]} ${sizes[size]} ${className}`} />
+  );
 }
 
 export function TextArea({

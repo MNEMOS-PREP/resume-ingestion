@@ -12,6 +12,14 @@
  * never be mistaken for one."*  There is no total score on this screen and §15
  * decision 1 recommends there never is.
  *
+ * ── Two forms, for the reason the module's other pairs have two ─────────────
+ *
+ * `ClaimList` takes claims; `ClaimMap` fetches them. M06 mounts the fetching
+ * form with a resume id it already holds. M01's own workspace fetches once at
+ * the top — the rail needs the counts and `fix_first`, the centre needs the
+ * claims, and two components each calling `useClaims` is two chances for the
+ * rail to say "4 risky" while the list beside it shows three.
+ *
  * ── The one thing to fix first ──────────────────────────────────────────────
  *
  * Chosen by the server (`fix_first`), not here, so two screens cannot disagree
@@ -23,12 +31,12 @@
  * ── Keyboard ────────────────────────────────────────────────────────────────
  *
  * §8.3: *"j/k to move between claims, Enter to open the drill, e to edit. Power
- * users exist even among students."*  `Enter` opens the rewrite rather than a
- * drill, because the drill is M06 and M06 is not built — a key that silently
- * does nothing is worse than one that does the nearest real thing.
+ * users exist even among students."*  The cursor walks the list AS RENDERED, so
+ * with a band filter applied j/k stay inside it — a cursor that jumps to a
+ * claim the student cannot see is worse than no cursor.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useClaims, useRewriteClaim } from "../api";
 import { BANDS, BAND_ORDER } from "./bands";
@@ -38,32 +46,34 @@ import { RewriteDiff } from "./RewriteDiff";
 import { Empty, Panel, Section, SkeletonRows } from "../ui/primitives";
 import type { ResumeClaim, RiskBand } from "../types";
 
-export function ClaimMap({
+/* ------------------------------------------------------------------ */
+/*  The list                                                           */
+/* ------------------------------------------------------------------ */
+
+export function ClaimList({
   resumeId,
-  onSelectSpan,
+  claims,
+  selectedId,
+  onSelect,
   onEditClaim,
+  keyboard = true,
 }: {
   resumeId: string;
-  onSelectSpan: (claim: ResumeClaim) => void;
+  claims: ResumeClaim[];
+  /** The claim whose words are lit up in the document panel. */
+  selectedId: string | null;
+  onSelect: (claim: ResumeClaim) => void;
   onEditClaim: (claim: ResumeClaim) => void;
+  /** Off for a second mounted copy, so two lists cannot both answer `j`. */
+  keyboard?: boolean;
 }) {
-  const listing = useClaims(resumeId);
   const rewrite = useRewriteClaim(resumeId);
-  const [cursor, setCursor] = useState(0);
   const [openRewrite, setOpenRewrite] = useState<string | null>(null);
   const [openDrill, setOpenDrill] = useState<string | null>(null);
-  const container = useRef<HTMLDivElement>(null);
 
-  const claims = useMemo(() => listing.data?.claims ?? [], [listing.data]);
-
-  const select = useCallback(
-    (index: number) => {
-      const claim = claims[index];
-      if (!claim) return;
-      setCursor(index);
-      onSelectSpan(claim);
-    },
-    [claims, onSelectSpan],
+  const cursor = useMemo(
+    () => claims.findIndex((claim) => claim.id === selectedId),
+    [claims, selectedId],
   );
 
   const askForRewrite = useCallback(
@@ -81,6 +91,8 @@ export function ClaimMap({
   }, []);
 
   useEffect(() => {
+    if (!keyboard) return;
+
     function onKey(event: KeyboardEvent) {
       // Never steal a key from someone typing into the confirmation editor.
       const target = event.target as HTMLElement | null;
@@ -88,30 +100,122 @@ export function ClaimMap({
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (!claims.length) return;
 
+      // Nothing selected yet: j starts at the top, k at the bottom. Otherwise
+      // the first keypress on a fresh page appears to do nothing.
+      const at = cursor < 0 ? (event.key === "k" ? claims.length : -1) : cursor;
+      const current = claims[cursor < 0 ? 0 : cursor];
+
       if (event.key === "j") {
         event.preventDefault();
-        select(Math.min(cursor + 1, claims.length - 1));
+        onSelect(claims[Math.min(at + 1, claims.length - 1)]);
       } else if (event.key === "k") {
         event.preventDefault();
-        select(Math.max(cursor - 1, 0));
+        onSelect(claims[Math.max(at - 1, 0)]);
       } else if (event.key === "Enter") {
         event.preventDefault();
-        // §8.3: "Enter to open the drill". It used to open the rewrite, with a
-        // comment explaining that the drill was M06 and M06 was not built. The
-        // drill affordance exists now and degrades honestly on its own, so the
-        // binding does what the spec says.
-        startDrill(claims[cursor]);
+        startDrill(current);
       } else if (event.key === "r") {
         event.preventDefault();
-        askForRewrite(claims[cursor]);
+        askForRewrite(current);
       } else if (event.key === "e") {
         event.preventDefault();
-        onEditClaim(claims[cursor]);
+        onEditClaim(current);
       }
     }
+
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [claims, cursor, select, askForRewrite, startDrill, onEditClaim]);
+  }, [keyboard, claims, cursor, onSelect, askForRewrite, startDrill, onEditClaim]);
+
+  if (claims.length === 0) {
+    return (
+      <Empty title="Nothing in this group">
+        Every claim we read sits under one of the other bands. Clear the filter to see them.
+      </Empty>
+    );
+  }
+
+  return (
+    <div>
+      {BAND_ORDER.map((band) => {
+        const inBand = claims.filter((claim) => claim.risk_band === band);
+        if (inBand.length === 0) return null;
+        return (
+          <Section
+            key={band}
+            label={`${BANDS[band].icon} ${BANDS[band].label.toUpperCase()} — ${BANDS[band].meaning}`}
+            meta={`${inBand.length}`}
+          >
+            <div className="space-y-2.5">
+              {inBand.map((claim) => (
+                <div key={claim.id} id={`claim-${claim.id}`} className="scroll-mt-4">
+                  <ClaimCard
+                    claim={claim}
+                    selected={claim.id === selectedId}
+                    onSelect={() => onSelect(claim)}
+                    onRewrite={() => askForRewrite(claim)}
+                    onEdit={() => onEditClaim(claim)}
+                    onDrill={() => startDrill(claim)}
+                  />
+                  {openDrill === claim.id && (
+                    <div className="mt-2">
+                      <DrillPanel
+                        resumeId={resumeId}
+                        claimId={claim.id}
+                        onClose={() => setOpenDrill(null)}
+                      />
+                    </div>
+                  )}
+                  {openRewrite === claim.id && (
+                    <div className="mt-2">
+                      {rewrite.isPending && <SkeletonRows rows={3} />}
+                      {rewrite.data && rewrite.data.claim_id === claim.id && (
+                        <RewriteDiff
+                          suggestion={rewrite.data}
+                          onClose={() => setOpenRewrite(null)}
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Section>
+        );
+      })}
+
+      <p className="provenance mt-8">
+        j / k to move · Enter to practise · r to rewrite · e to edit
+      </p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  The fetching form, for modules that hold only an id                */
+/* ------------------------------------------------------------------ */
+
+export function ClaimMap({
+  resumeId,
+  onSelectSpan,
+  onEditClaim,
+}: {
+  resumeId: string;
+  onSelectSpan: (claim: ResumeClaim) => void;
+  onEditClaim: (claim: ResumeClaim) => void;
+}) {
+  const listing = useClaims(resumeId);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const claims = useMemo(() => listing.data?.claims ?? [], [listing.data]);
+
+  const select = useCallback(
+    (claim: ResumeClaim) => {
+      setSelectedId(claim.id);
+      onSelectSpan(claim);
+    },
+    [onSelectSpan],
+  );
 
   if (listing.isLoading) return <SkeletonRows rows={6} />;
 
@@ -128,7 +232,7 @@ export function ClaimMap({
   const risky = counts.risky ?? 0;
 
   return (
-    <div ref={container}>
+    <div>
       <header className="mb-6">
         <h2 className="text-title font-semibold text-ink">
           Your resume, as an interviewer sees it
@@ -140,79 +244,49 @@ export function ClaimMap({
         </p>
       </header>
 
-      {fixFirst && <FixFirstCard claim={fixFirst} onSelect={() => onSelectSpan(fixFirst)} />}
+      {fixFirst && <FixFirstCard claim={fixFirst} onSelect={() => select(fixFirst)} />}
 
-      {BAND_ORDER.map((band) => {
-        const inBand = claims.filter((claim) => claim.risk_band === band);
-        if (inBand.length === 0) return null;
-        return (
-          <Section
-            key={band}
-            label={`${BANDS[band].icon} ${BANDS[band].label.toUpperCase()} — ${BANDS[band].meaning}`}
-            meta={`${inBand.length}`}
-          >
-            <div className="space-y-2.5">
-              {inBand.map((claim) => {
-                const index = claims.indexOf(claim);
-                return (
-                  <div key={claim.id}>
-                    <ClaimCard
-                      claim={claim}
-                      selected={index === cursor}
-                      onSelect={() => select(index)}
-                      onRewrite={() => askForRewrite(claim)}
-                      onEdit={() => onEditClaim(claim)}
-                      onDrill={() => startDrill(claim)}
-                    />
-                    {openDrill === claim.id && (
-                      <div className="mt-2">
-                        <DrillPanel
-                          resumeId={resumeId}
-                          claimId={claim.id}
-                          onClose={() => setOpenDrill(null)}
-                        />
-                      </div>
-                    )}
-                    {openRewrite === claim.id && (
-                      <div className="mt-2">
-                        {rewrite.isPending && <SkeletonRows rows={3} />}
-                        {rewrite.data && rewrite.data.claim_id === claim.id && (
-                          <RewriteDiff
-                            suggestion={rewrite.data}
-                            onClose={() => setOpenRewrite(null)}
-                          />
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </Section>
-        );
-      })}
-
-      <p className="provenance mt-8">
-        j / k to move · Enter to practise · r to rewrite · e to edit
-      </p>
+      <ClaimList
+        resumeId={resumeId}
+        claims={claims}
+        selectedId={selectedId}
+        onSelect={select}
+        onEditClaim={onEditClaim}
+      />
     </div>
   );
 }
 
 /**
- * §2.3's sticky card: *"Bullet 3 in 'Crop Disease Detection'. It's your most
- * prominent claim and your least defensible one."*
+ * §2.3's card: *"Bullet 3 in 'Crop Disease Detection'. It's your most prominent
+ * claim and your least defensible one."*
  *
- * Sticky at the bottom on mobile per §8.3, static in the flow above the map on
- * a wide screen where it does not have to compete for the same space.
+ * In the workspace this is pinned in the rail, where it is permanently in view
+ * rather than scrolling away exactly when the student starts reading the thing
+ * it points at. `compact` is that placement: same words, no sticky behaviour,
+ * because the rail does not scroll with the claims.
  */
-function FixFirstCard({ claim, onSelect }: { claim: ResumeClaim; onSelect: () => void }) {
+export function FixFirstCard({
+  claim,
+  onSelect,
+  compact = false,
+}: {
+  claim: ResumeClaim;
+  onSelect: () => void;
+  compact?: boolean;
+}) {
   return (
-    // Sticky at the BOTTOM on a narrow screen, static in the flow above the map
-    // on a wide one. §8.3 asks for the first because on a phone the card
-    // scrolls away exactly when the student starts reading the thing it is
-    // pointing at, and the whole job of the card is to still be there then.
-    <Panel className="sticky bottom-2 z-20 mb-8 border-brand-line bg-brand-soft px-4 py-3.5 shadow-raised lg:static lg:z-auto lg:shadow-none">
+    <Panel
+      className={[
+        "border-brand-line bg-brand-soft px-4 py-3.5",
+        compact
+          ? ""
+          : // Sticky at the BOTTOM on a narrow screen, static in the flow on a
+            // wide one (§8.3) — on a phone the card scrolls away exactly when
+            // the student starts reading what it points at.
+            "sticky bottom-2 z-20 mb-8 shadow-raised lg:static lg:z-auto lg:shadow-none",
+      ].join(" ")}
+    >
       <p className="flex items-center gap-2 text-sm font-semibold text-ink">
         <span aria-hidden>🎯</span> The one thing to fix first
       </p>

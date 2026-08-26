@@ -34,35 +34,10 @@ import {
 } from "../api";
 import { DateEditor } from "./DateEditor";
 import { Btn, Panel, Section, TextField } from "../ui/primitives";
-import type { ClaimType, Resume, ResumeClaim, ResumeSection, SectionKind } from "../types";
+import { SECTION_KINDS, SECTION_LABEL } from "./sections";
+import type { ClaimType, Resume, ResumeClaim, ResumeSection } from "../types";
 
-const SECTION_KINDS: SectionKind[] = [
-  "contact",
-  "summary",
-  "education",
-  "experience",
-  "projects",
-  "skills",
-  "achievements",
-  "certifications",
-  "publications",
-  "extras",
-  "unknown",
-];
 
-const KIND_LABEL: Record<SectionKind, string> = {
-  contact: "Contact",
-  summary: "Summary",
-  education: "Education",
-  experience: "Experience",
-  projects: "Projects",
-  skills: "Skills",
-  achievements: "Achievements",
-  certifications: "Certifications",
-  publications: "Publications",
-  extras: "Extra-curricular",
-  unknown: "Not sure",
-};
 
 export function ConfirmationEditor({
   resume,
@@ -218,7 +193,7 @@ function SectionRow({ resume, section }: { resume: Resume; section: ResumeSectio
           >
             {SECTION_KINDS.map((kind) => (
               <option key={kind} value={kind}>
-                {KIND_LABEL[kind]}
+                {SECTION_LABEL[kind]}
               </option>
             ))}
           </select>
