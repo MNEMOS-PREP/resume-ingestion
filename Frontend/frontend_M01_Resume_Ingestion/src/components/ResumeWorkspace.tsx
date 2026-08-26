@@ -45,7 +45,7 @@ import { RedFlagPanel } from "./RedFlagBanner";
 import { SECTION_LABEL, SECTION_STAKE } from "./sections";
 import { ScanSourceNote, SkillPanel } from "./SkillSet";
 import { RedactionNote, SourceHighlight } from "./SourceHighlight";
-import { Empty, Panel, Section, SkeletonRows } from "../ui/primitives";
+import { Btn, Empty, Panel, Section, SkeletonRows } from "../ui/primitives";
 import type { Resume, ResumeClaim, SectionKind, SourceSpan } from "../types";
 
 export function ResumeWorkspace({
@@ -79,6 +79,19 @@ export function ResumeWorkspace({
     setSpans([claim.span]);
   }
 
+  // Position within the VISIBLE list, not the whole one: the buttons have to
+  // agree with what is on screen, or "next" skips past claims a filter is
+  // hiding and the count reads wrong.
+  const at = visible.findIndex((claim) => claim.id === selectedId);
+
+  function step(delta: number) {
+    if (visible.length === 0) return;
+    // From nothing, "next" means the first and "previous" means the last.
+    const next = at < 0 ? (delta > 0 ? 0 : visible.length - 1) : at + delta;
+    const claim = visible[Math.max(0, Math.min(next, visible.length - 1))];
+    if (claim) select(claim);
+  }
+
   const document = (
     <>
       <div className="flex shrink-0 items-baseline justify-between gap-2 px-4 pt-4 pb-2">
@@ -97,7 +110,12 @@ export function ResumeWorkspace({
         )}
       </div>
       <div className="min-h-0 flex-1 px-4">
-        <SourceHighlight fill text={resume.redacted_text} spans={spans} />
+        <SourceHighlight
+          fill
+          text={resume.redacted_text}
+          spans={spans}
+          sections={resume.sections}
+        />
       </div>
       <div className="shrink-0 px-4 pt-2 pb-4">
         <RedactionNote />
@@ -155,6 +173,24 @@ export function ResumeWorkspace({
           <div className="mt-1 max-w-2xl">
             <ScanSourceNote scannedAgainst={resume.scanned_against} />
           </div>
+
+          {/* The same movement `j` and `k` do, for the people who will never
+              find out that `j` and `k` do it. §8.3 asks for the keys and is
+              explicit that "power users exist even among students" — which is
+              an argument for the keys, not against the buttons. */}
+          {visible.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <Btn type="button" variant="secondary" size="sm" onClick={() => step(-1)}>
+                &larr; Previous
+              </Btn>
+              <Btn type="button" variant="secondary" size="sm" onClick={() => step(1)}>
+                Next &rarr;
+              </Btn>
+              <span className="provenance" data-numeric>
+                {at < 0 ? `${visible.length} claims` : `${at + 1} of ${visible.length}`}
+              </span>
+            </div>
+          )}
         </header>
 
         {filter?.by === "section" && <SectionBrief kind={filter.kind} claims={visible} />}

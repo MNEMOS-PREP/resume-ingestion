@@ -39,7 +39,51 @@
 import { useEffect, useMemo, useRef } from "react";
 
 import { Panel } from "../ui/primitives";
-import type { SourceSpan } from "../types";
+import { SECTION_LABEL } from "./sections";
+import type { ResumeSection, SourceSpan } from "../types";
+
+/** One labelled run of the document, in reading order. */
+interface Block {
+  /** `null` for the text above the first heading — usually the contact block. */
+  kind: ResumeSection["kind"] | null;
+  start: number;
+  end: number;
+}
+
+/**
+ * Cut the document into the sections the parser found.
+ *
+ * The panel used to be one unbroken `pre`. On a real resume that is sixty lines
+ * of monospace with no landmarks, so finding the highlighted bullet meant
+ * reading for it — on the panel whose entire job is to show the student we read
+ * THEIR document. Section headings are the landmarks, and M01 already knows
+ * where they are.
+ *
+ * Gaps are kept, never dropped. Text between two sections belongs to neither
+ * and is still on the resume; swallowing it would make this panel disagree with
+ * the document it claims to be showing, which is the one thing it cannot do.
+ */
+function blocks(text: string, sections: ResumeSection[]): Block[] {
+  const ordered = [...sections]
+    .map((section) => ({
+      kind: section.kind,
+      start: Math.max(0, Math.min(section.span.start, text.length)),
+      end: Math.max(0, Math.min(section.span.end, text.length)),
+    }))
+    .filter((block) => block.end > block.start)
+    .sort((a, b) => a.start - b.start);
+
+  const out: Block[] = [];
+  let cursor = 0;
+  for (const block of ordered) {
+    if (block.start > cursor) out.push({ kind: null, start: cursor, end: block.start });
+    // Overlapping sections would render the same characters twice.
+    out.push({ ...block, start: Math.max(block.start, cursor) });
+    cursor = Math.max(cursor, block.end);
+  }
+  if (cursor < text.length) out.push({ kind: null, start: cursor, end: text.length });
+  return out.filter((block) => text.slice(block.start, block.end).trim().length > 0);
+}
 
 /** A run of the document, and whether it is part of the current finding. */
 interface Segment {
@@ -89,6 +133,7 @@ export function SourceHighlight({
   span,
   spans,
   emptyNote,
+  sections,
   fill = false,
 }: {
   text: string;
@@ -97,6 +142,12 @@ export function SourceHighlight({
   /** Several — a red flag, or every occurrence of a skill. Wins over `span`. */
   spans?: SourceSpan[] | null;
   emptyNote?: string;
+  /**
+   * Split the document at these section boundaries, with the section name as a
+   * separator. Omit for one unbroken run — which is what a caller holding only
+   * a text and a span has.
+   */
+  sections?: ResumeSection[];
   /**
    * Fill the parent instead of capping at 28rem.
    *
@@ -125,7 +176,10 @@ export function SourceHighlight({
     first.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [key]);
 
-  const segments = useMemo(() => segment(text, active), [text, active]);
+  const stack = useMemo(
+    () => (sections && sections.length > 0 ? blocks(text, sections) : null),
+    [text, sections],
+  );
 
   if (!text.trim()) {
     return (
@@ -137,19 +191,24 @@ export function SourceHighlight({
     );
   }
 
-  let seenHit = false;
+  // `first` is attached to the first highlight ACROSS every block, so the
+  // scroll still lands on the right line once the document is split up.
+  const seen = { hit: false };
 
-  return (
-    <Panel
-      tone="sunken"
-      className={`overflow-y-auto px-4 py-3 ${fill ? "h-full" : "max-h-[28rem]"}`}
-    >
+  const body = (from: number, to: number) => {
+    const slice = text.slice(from, to);
+    const local = active
+      .map((s) => ({ ...s, start: s.start - from, end: s.end - from }))
+      .filter((s) => s.end > 0 && s.start < slice.length);
+    const parts = segment(slice, local as SourceSpan[]);
+
+    return (
       <pre className="text-source whitespace-pre-wrap break-words font-mono text-ink-soft">
-        {segments
-          ? segments.map((part, index) => {
+        {parts
+          ? parts.map((part, index) => {
               if (!part.hit) return <span key={index}>{part.text}</span>;
-              const isFirst = !seenHit;
-              seenHit = true;
+              const isFirst = !seen.hit;
+              seen.hit = true;
               return (
                 <mark
                   key={index}
@@ -160,8 +219,38 @@ export function SourceHighlight({
                 </mark>
               );
             })
-          : text}
+          : slice}
       </pre>
+    );
+  };
+
+  return (
+    <Panel
+      tone="sunken"
+      className={`overflow-y-auto px-4 py-3 ${fill ? "h-full" : "max-h-[28rem]"}`}
+    >
+      {stack
+        ? stack.map((block, index) => (
+            <section key={`${block.start}-${block.end}`}>
+              {/* The separator carries the name, so a student scrolling this
+                  panel knows where they are without reading for it. The block
+                  above the first heading has no name — it is the contact line,
+                  and labelling it "Contact" here would assert something the
+                  segmenter only guessed. */}
+              {block.kind && (
+                <div
+                  className={`flex items-center gap-3 ${index === 0 ? "mb-2" : "mb-2 mt-5"}`}
+                  aria-hidden
+                >
+                  <span className="h-px flex-1 bg-line-strong" />
+                  <span className="rule-label shrink-0">{SECTION_LABEL[block.kind]}</span>
+                  <span className="h-px flex-1 bg-line-strong" />
+                </div>
+              )}
+              {body(block.start, block.end)}
+            </section>
+          ))
+        : body(0, text.length)}
     </Panel>
   );
 }
