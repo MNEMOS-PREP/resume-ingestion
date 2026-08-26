@@ -126,14 +126,14 @@ need it, and apply the penalty only to those. Roughly twenty lines in
 
 | | |
 |---|---|
-| Backend tests passing | **296** (offline, no API key, no socket) |
-| Release gates (§13) | **25 gate tests pass** — AC-1.1 (paste + upload), AC-1.2, AC-1.6, AC-1.9, the two contract gates, and AC-1.3/1.4/1.5 as regression floors |
+| Backend tests passing | **305** (offline, no API key, no socket) |
+| Release gates (§13) | **27 gate tests pass** — AC-1.1 (paste + upload), AC-1.2, AC-1.6, AC-1.9, the two contract gates, and AC-1.3/1.4/1.5 as regression floors |
 | FRs met | **19 fully · 1 partially · 0 missing** |
-| §7 API surface | **32 routes · every one reachable from a screen**, enforced at `-m gate` |
+| §7 API surface | **34 routes · every one reachable from a screen**, enforced at `-m gate` |
 | Completion | **~90%** of the written spec, and the last 10% is not evenly spread — see §11 |
 
 *Audited 2026-08-25 against the spec section by section, verifying in code
-rather than from this file. `pytest` 296 passed · `pytest -m gate` 25 passed ·
+rather than from this file. `pytest` 305 passed · `pytest -m gate` 27 passed ·
 `ruff check` clean · `tsc --noEmit` clean · `npm run build` clean ·
 `research/score_golden.py` 1.000 / 1.000 / 1.000.*
 
@@ -150,7 +150,7 @@ rather than from this file. `pytest` 296 passed · `pytest -m gate` 25 passed ·
 | ID | Requirement | State | Where |
 |---|---|---|---|
 | FR-1.1 | Accept PDF, DOCX, pasted text; named error otherwise | ✅ | `documents.py` |
-| FR-1.2 | Immutable raw storage keyed by SHA-256 | 🟡 | `objectstore.py` — S3/R2/MinIO backend behind the contract; no bucket to point it at, and no virus scan |
+| FR-1.2 | Immutable raw storage keyed by SHA-256 | 🟡 | The uploaded FILE is now kept (`source_sha256`), not just the extracted text — that was the requirement being met against the wrong artifact. Still no bucket to point `objectstore.py` at, and no virus scan |
 | FR-1.3 | Text layer with per-word bboxes and page numbers | ✅ | `documents.py` |
 | FR-1.4 | Multi-column detection + correct reading order | ✅ | `documents.detect_columns` |
 | FR-1.5 | Section segmentation with per-section confidence | ✅ | lexicon + typography (font size, bold) + caps + word count |
@@ -655,17 +655,29 @@ describes, and the difference is invisible from outside the code.
 
 ### 11.4 Screens thinner than the spec draws them
 
-- ⬜ **`PdfHighlightViewer` (§8.1, §8.3).** *"Click a claim → the original PDF
-      scrolls and highlights that exact bullet… a 4-hour feature that buys
-      enormous trust."*  `SourceHighlight` highlights the redacted TEXT, which
-      carries the same guarantee and none of the recognition. The `bbox` is
-      extracted, stored on every span, and rendered by nothing.
-- ⬜ **Screen 3 is four flat lists, not the project tree §2.3 draws.** The spec
-      shows each project as a card with its title, its dates, its tech chips
-      (`Tech: TensorFlow, OpenCV, Flask [+ add tech]`) and its own bullets.
-      Sections, bullets, skills and dates are each editable — but separately, so
-      a student fixing one mis-read project edits it in three places and never
-      sees it as one thing.
+- ✅ **`PdfHighlightViewer` (§8.1, §8.3) — landed 2026-08-25.** Click a claim
+      and the box is drawn on the page the student actually uploaded.
+      Server-side render, because pdf.js over the original bytes would send the
+      UNREDACTED document to a browser — the exact artifact FR-1.17 keeps in
+      one place. The contact rectangles are filled BEFORE the pixmap is taken,
+      so the served image never contained the contact block at any point, and a
+      gate test samples every rectangle rather than trusting the call.
+      **This needed FR-1.2 fixing first:** `store_artifact` was being passed the
+      extracted TEXT, so the uploaded file was discarded at ingest and there was
+      no page to render. `source_sha256` / `source_uri` now hold the file, and
+      deletion removes both blobs.
+- ✅ **Screen 3 groups by section — landed 2026-08-25.** Bullets, dates and
+      skills now live inside the section they belong to, so correcting a heading
+      and correcting what it contains happen in one place.
+      **Honestly: a SECTION, not a project.** §2.3 draws "Crop Disease
+      Detection" with its own tech chips; M01 finds the Projects block and does
+      not yet split it into individual projects. Containment is by character
+      offset, the same span arithmetic everything else rests on. The
+      per-project split is below.
+- ⬜ **Split a projects/experience block into individual entries.** The
+      remaining half of §2.3's card: a title, its dates, its tech, its bullets.
+      Real extraction work — entry detection inside a section — not a UI
+      change, which is why the grouping above stops at the section.
 - ⬜ **The per-section "I couldn't read this one" affordance (§2.3, §8.2).**
       *"⚠ I couldn't read one section clearly (page 2, bottom). [Show me]
       [It's not important]"*, and §8.2's ConfirmationEditor error column asks for

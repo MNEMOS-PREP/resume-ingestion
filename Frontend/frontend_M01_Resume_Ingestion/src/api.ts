@@ -51,6 +51,7 @@ import type {
   ResumeDiff,
   ResumeEventRow,
   ResumeIngestIn,
+  ResumePageInfo,
   RevokeResult,
   RewriteSuggestion,
   ShareGrant,
@@ -167,6 +168,7 @@ export const m01Keys = {
   contact: (id: string) => ["m01", "contact", id] as const,
   corrections: (id: string) => ["m01", "corrections", id] as const,
   events: (id: string) => ["m01", "events", id] as const,
+  pages: (id: string) => ["m01", "pages", id] as const,
   disclosure: (id: string, viewer: string) => ["m01", "disclosure", id, viewer] as const,
 };
 
@@ -611,4 +613,42 @@ export function useStartDrill(resumeId: string) {
     mutationFn: (claimId: string) =>
       api.post<DrillHandoff>(`/v1/resumes/${resumeId}/claims/${claimId}/drill`),
   });
+}
+
+/* ------------------------------------------------------------------ */
+/*  The original page (§8.1 PdfHighlightViewer, §8.3)                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The pages of the uploaded document, with their size in points.
+ *
+ * An empty list is the answer for a pasted resume, and §8.2 asks for that as a
+ * STATE — "Original not available (pasted text)" — rather than an error. The
+ * viewer branches on it and falls back to the text highlight.
+ */
+export function usePages(resumeId: string | undefined) {
+  return useQuery({
+    queryKey: m01Keys.pages(resumeId ?? ""),
+    enabled: Boolean(resumeId),
+    retry: false,
+    // A stored file does not change; only a re-upload does, and that is a
+    // different resume id.
+    staleTime: Infinity,
+    queryFn: () => api.get<ResumePageInfo[]>(`/v1/resumes/${resumeId}/pages`),
+  });
+}
+
+/**
+ * The URL of one rendered page.
+ *
+ * A plain `img src` rather than a hook: the browser's own image cache is
+ * better at this than react-query is, and the contact block is already painted
+ * out server-side, so there is nothing here that needs the fetch wrapper.
+ *
+ * That does mean it carries no identity header — which is why the backend also
+ * keys this route by resume id and refuses at the router. An image URL that
+ * leaked would be a leak of a page whose contact block was already removed.
+ */
+export function pageImageUrl(resumeId: string, page: number): string {
+  return `${BASE}/v1/resumes/${resumeId}/pages/${page}`;
 }

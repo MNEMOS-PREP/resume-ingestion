@@ -184,3 +184,91 @@ def remove(digest: str, *, root: Path | None = None) -> bool:
         return False
     log.info("M01 removed artifact %s", digest[:12])
     return True
+
+
+# ---------------------------------------------------------------------------
+#  The uploaded FILE, as opposed to the text we read out of it
+# ---------------------------------------------------------------------------
+#
+# FR-1.2: *"Store the raw file immutably in object storage, keyed by SHA-256 of
+# contents."*  What `put` above stores is the extracted TEXT, which is a
+# different artifact with a different digest — so the requirement was half met
+# and `content_sha256` was the digest of a derivative rather than of the file.
+#
+# Three things that only work with the bytes:
+#
+#   · EC-1.8's dedup. The same PDF exported twice by the same tool is the same
+#     bytes; its extracted text can differ by a space and miss.
+#   · §8.3's highlight over the ORIGINAL page — there has to be a page.
+#   · Re-verifying a parse against what was actually uploaded, rather than
+#     against our own reading of it.
+#
+# Kept beside the text rather than instead of it: the text blob is what every
+# span resolves against and is cheap, and a deployment with no PDF library
+# still has one.
+
+
+def digest_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def put_bytes(
+    data: bytes,
+    *,
+    suffix: str = "bin",
+    root: Path | None = None,
+    candidate_id: str | None = None,
+) -> tuple[str, str]:
+    """Store the uploaded file under the digest OF THE FILE. Returns (digest, uri).
+
+    Same content-addressing and same write-then-rename as `put`; the suffix is
+    carried so a later reader knows what it is holding without sniffing.
+    """
+    root = root or BLOB_ROOT
+    digest = digest_bytes(data)
+
+    remote = objectstore.from_env()
+    if remote is not None and candidate_id:
+        key = object_key(candidate_id, digest, suffix)
+        try:
+            remote.put(key, data, metadata={"candidate_id": candidate_id, "sha256": digest})
+            return digest, f"s3://{key}"
+        except Exception as error:
+            log.error("M01 object store write failed (%s); falling back to the local tree", error)
+
+    path = _path_for(digest, root).with_suffix(f".{suffix}")
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temp = path.with_suffix(f".{suffix}.part")
+        temp.write_bytes(data)
+        temp.replace(path)
+        log.info("M01 stored source file %s (%s)", digest[:12], suffix)
+
+    _record_owner(path, digest, candidate_id)
+    return digest, path.resolve().as_uri()
+
+
+def get_bytes(digest: str, *, suffix: str = "bin", root: Path | None = None) -> bytes | None:
+    """The uploaded file, or None. Never raises for a missing blob.
+
+    A missing source is a degraded read and not a crash: the row still carries
+    the redacted text and every span, so the text highlight still works and the
+    page view is the only thing that cannot be offered.
+    """
+    path = _path_for(digest, root or BLOB_ROOT).with_suffix(f".{suffix}")
+    if not path.exists():
+        return None
+    return path.read_bytes()
+
+
+def remove_bytes(digest: str, *, suffix: str = "bin", root: Path | None = None) -> bool:
+    """Delete the stored file. Returns whether there was one. Never raises."""
+    path = _path_for(digest, root or BLOB_ROOT).with_suffix(f".{suffix}")
+    try:
+        path.unlink()
+        return True
+    except FileNotFoundError:
+        return False
+    except OSError as error:  # pragma: no cover - a locked file is not a crash
+        log.error("M01 could not remove source file %s: %s", digest[:12], error)
+        return False

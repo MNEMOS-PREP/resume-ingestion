@@ -76,6 +76,15 @@ class Resume(SQLModel, table=True):
     #: digest either way, which is the half of FR-1.2 that has to be true.
     storage_uri: str = Field(default="")
 
+    #: SHA-256 of the UPLOADED FILE, and where it is kept.
+    #:
+    #: `content_sha256` above is the digest of the extracted TEXT, which is a
+    #: derivative — so FR-1.2's "keyed by SHA-256 of contents" was being met
+    #: against the wrong artifact, and the file itself was thrown away at
+    #: ingest. Empty for the paste path, which has no file and never had one.
+    source_sha256: str = Field(default="", index=True)
+    source_uri: str = Field(default="")
+
     # ------------------------------------------------------------------
     #  Provenance of the parse itself (spec §5 SQL)
     # ------------------------------------------------------------------
@@ -195,6 +204,7 @@ class ResumeOut(SQLModel):
     red_flags: list[dict]
     entities: dict
     storage_uri: str
+    source_sha256: str
     filename: str | None
     mime: str
     page_count: int

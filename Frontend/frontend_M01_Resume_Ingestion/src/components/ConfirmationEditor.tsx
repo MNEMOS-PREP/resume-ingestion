@@ -32,12 +32,10 @@ import {
   useEditClaim,
   useEditSkill,
 } from "../api";
-import { DateEditor } from "./DateEditor";
+import { DateRow } from "./DateEditor";
 import { Btn, Panel, Section, TextField } from "../ui/primitives";
 import { SECTION_KINDS, SECTION_LABEL } from "./sections";
 import type { ClaimType, Resume, ResumeClaim, ResumeSection } from "../types";
-
-
 
 export function ConfirmationEditor({
   resume,
@@ -63,9 +61,9 @@ export function ConfirmationEditor({
       <ParseNotes resume={resume} />
 
       <Section label="Sections" meta={sectionProgress(resume)}>
-        <div className="space-y-2">
+        <div className="space-y-3">
           {resume.sections.map((section) => (
-            <SectionRow key={section.id} resume={resume} section={section} />
+            <SectionCard key={section.id} resume={resume} section={section} />
           ))}
         </div>
         {resume.sections.length === 0 && (
@@ -78,12 +76,8 @@ export function ConfirmationEditor({
         )}
       </Section>
 
-      <BulletEditor resume={resume} />
+      <Orphans resume={resume} />
       <SkillChipEditor resume={resume} />
-      {/* §2.3's fourth editable target. It was the one thing a student could
-          not fix, and it drives the gap flag they are then asked to prepare
-          an answer for. */}
-      <DateEditor resume={resume} />
 
       <div className="flex flex-wrap items-center gap-3 border-t border-line pt-5">
         <Btn
@@ -115,13 +109,6 @@ function sectionProgress(resume: Resume): string {
   if (total === 0) return "none found";
   const sure = resume.sections.filter((section) => section.confidence >= 0.5).length;
   return sure === total ? `${total} found` : `read ${sure} of ${total} clearly`;
-}
-
-function claimProgress(resume: Resume): string {
-  const total = resume.claims.length;
-  if (total === 0) return "none found";
-  const scored = resume.claims.filter((claim) => claim.risk_band).length;
-  return scored === total ? `${total} found` : `${scored} of ${total} scored`;
 }
 
 function skillProgress(resume: Resume): string {
@@ -172,15 +159,47 @@ function ParseNotes({ resume }: { resume: Resume }) {
   );
 }
 
-/** One section, relabelable in place (FR-1.11). */
-function SectionRow({ resume, section }: { resume: Resume; section: ResumeSection }) {
+/**
+ * One section of the resume, with everything that belongs to it inside it.
+ *
+ * §2.3 Screen 3 draws a PROJECT as a card — its title, its dates, its tech, its
+ * bullets — and this screen used to draw four parallel lists instead: every
+ * section, then every bullet, then every skill, then every date. A student
+ * fixing one mis-read project edited it in three places and never once saw it
+ * as a single thing.
+ *
+ * ── What the grouping is, honestly ──────────────────────────────────────────
+ *
+ * A SECTION, not a project. M01 finds the Projects block; it does not yet split
+ * that block into individual projects, so a card here says "Projects" rather
+ * than "Crop Disease Detection". Everything inside it is genuinely its own —
+ * containment is by character offset, the same span arithmetic every other
+ * claim in this module rests on — and the per-project split is a real
+ * extraction feature, filed rather than faked.
+ *
+ * What it fixes today is the thing a student actually hits: the bullets, dates
+ * and skills of a section are now IN the section, so correcting a heading and
+ * correcting what it contains happen in one place.
+ */
+function SectionCard({ resume, section }: { resume: Resume; section: ResumeSection }) {
   const correct = useCorrectSection(resume.id);
-  // Six lines, not two. The student is being asked "is this the right label
-  // for this block?", and two lines of a SKILLS section is one line of
-  // libraries — not enough of the block to judge it, on the screen §2.3
-  // calls the most important in the module.
+  const [open, setOpen] = useState(true);
+
+  const from = section.span.start;
+  const to = section.span.end;
+
+  const claims = resume.claims.filter((claim) => claim.section_id === section.id);
+  // Dates and skills carry offsets rather than a section id, so containment is
+  // the test. It is the same arithmetic `SourceHighlight` uses to split the
+  // document into blocks — one definition of "inside this section", not two.
+  const dates = (resume.entities?.dates ?? [])
+    .map((range, index) => ({ range, index }))
+    .filter(({ range }) => range.start >= from && range.start < to);
+  const skills = skillsWithin(resume, from, to);
+
   const preview = section.span.text.trim().split("\n").slice(0, 6).join(" · ");
   const lowConfidence = section.confidence < 0.5;
+  const inside = claims.length + dates.length + skills.length;
 
   return (
     <Panel className="px-4 py-3">
@@ -203,52 +222,127 @@ function SectionRow({ resume, section }: { resume: Resume; section: ResumeSectio
           </select>
         </label>
 
-        <span className="provenance">
-          {section.user_corrected ? (
-            <span className="text-confirmed">you corrected this</span>
-          ) : (
-            <>
-              {lowConfidence ? "unsure · " : ""}
-              {Math.round(section.confidence * 100)}% confident
-            </>
+        <span className="flex items-center gap-3">
+          <span className="provenance">
+            {section.user_corrected ? (
+              <span className="text-confirmed">you corrected this</span>
+            ) : (
+              <>
+                {lowConfidence ? "unsure · " : ""}
+                {Math.round(section.confidence * 100)}% confident
+              </>
+            )}
+          </span>
+          {inside > 0 && (
+            <button
+              type="button"
+              onClick={() => setOpen((previous) => !previous)}
+              aria-expanded={open}
+              className="provenance hover:text-ink-soft"
+            >
+              {open ? "hide" : `show ${inside}`}
+            </button>
           )}
         </span>
       </div>
 
       <p className="mt-2 line-clamp-3 text-sm text-ink-soft">{preview || "(empty)"}</p>
+
+      {open && inside > 0 && (
+        <div className="mt-3 space-y-4 border-t border-line pt-3">
+          {claims.length > 0 && (
+            <div>
+              <p className="rule-label mb-1.5">Bullets</p>
+              <div className="space-y-2">
+                {claims.map((claim) => (
+                  <BulletRow key={claim.id} resumeId={resume.id} claim={claim} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {dates.length > 0 && (
+            <div>
+              <p className="rule-label mb-1.5">Dates</p>
+              <div className="space-y-2">
+                {dates.map(({ range, index }) => (
+                  <DateRow
+                    key={`${index}-${range.raw}`}
+                    resumeId={resume.id}
+                    index={index}
+                    range={range}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {skills.length > 0 && (
+            <div>
+              <p className="rule-label mb-1.5">Skills written here</p>
+              <div className="flex flex-wrap gap-1.5">
+                {skills.map((skill) => (
+                  <SkillChip key={skill} resume={resume} skill={skill} />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </Panel>
   );
 }
 
 /**
- * Editing a bullet, and re-scoring it (§8.3).
+ * The skills a student wrote INSIDE this section.
  *
- * *"Editing a bullet re-scores only that claim, optimistically, in < 500 ms."*
- * The server re-scores just the edited claim and returns the whole resume, so
- * the band on this row can change under the student's hands — which is the
- * point. They watch a rewrite move a bullet out of "risky".
+ * By mention offset, so "Python" on the skills line and "Python" in a project
+ * bullet land in the section each was actually written in — which is the
+ * distinction §6.4 is built on, and the one a student is best placed to check.
  */
-function BulletEditor({ resume }: { resume: Resume }) {
-  if (resume.claims.length === 0) {
-    return (
-      <Section label="Bullets" meta="none left">
-        <Panel tone="sunken" className="px-4 py-3">
-          <p className="text-sm text-ink-soft">
-            No bullets. If you removed them all, that is allowed and nothing downstream is broken
-            by it &mdash; the rest of the product works without a resume at all.
-          </p>
-        </Panel>
-      </Section>
-    );
-  }
+function skillsWithin(resume: Resume, from: number, to: number): string[] {
+  const here = new Set(
+    resume.skill_mentions
+      .filter((mention) => mention.span.start >= from && mention.span.start < to)
+      .map((mention) => mention.surface.toLowerCase()),
+  );
+  return resume.parsed_skills.filter((skill) => here.has(skill.toLowerCase()));
+}
+
+/**
+ * Everything the sections did not claim.
+ *
+ * A bullet whose heading was dropped, a date found in open text, a skill
+ * written above the first heading. Small on a normal resume and the whole
+ * document on a heading-less one — and editable either way, because "we could
+ * not file this" is not a reason to stop a student correcting it.
+ */
+function Orphans({ resume }: { resume: Resume }) {
+  const filed = new Set(resume.sections.map((section) => section.id));
+  const claims = resume.claims.filter((claim) => !filed.has(claim.section_id));
+
+  const covered = (offset: number) =>
+    resume.sections.some((section) => offset >= section.span.start && offset < section.span.end);
+  const dates = (resume.entities?.dates ?? [])
+    .map((range, index) => ({ range, index }))
+    .filter(({ range }) => !covered(range.start));
+
+  if (claims.length === 0 && dates.length === 0) return null;
 
   return (
-    <Section label="Bullets" meta={claimProgress(resume)}>
+    <Section label="Outside every section" meta={`${claims.length + dates.length}`}>
       <div className="space-y-2">
-        {resume.claims.map((claim) => (
+        {claims.map((claim) => (
           <BulletRow key={claim.id} resumeId={resume.id} claim={claim} />
         ))}
+        {dates.map(({ range, index }) => (
+          <DateRow key={`${index}-${range.raw}`} resumeId={resume.id} index={index} range={range} />
+        ))}
       </div>
+      <p className="mt-2 text-xs text-ink-faint">
+        These are on your resume and did not land under any heading we recognised. They still
+        count, and they are still yours to fix.
+      </p>
     </Section>
   );
 }
@@ -413,6 +507,42 @@ function BulletRow({ resumeId, claim }: { resumeId: string; claim: ResumeClaim }
 }
 
 /**
+ * One skill, removable, wherever it is shown.
+ *
+ * Rendered twice now — inside the section it was written in, and in the full
+ * list at the bottom that also lets a student ADD one. A second copy of the
+ * markup is how the hatching that marks an unmapped skill ends up on one of
+ * them and not the other, and that hatching is the module's whole statement
+ * that we did not silently drop what the student wrote.
+ */
+function SkillChip({ resume, skill }: { resume: Resume; skill: string }) {
+  const edit = useEditSkill(resume.id);
+  const mapped = skill in resume.resolved_concepts;
+
+  return (
+    <span
+      className={[
+        "inline-flex items-center gap-1 rounded border px-2 py-0.5 text-sm",
+        mapped
+          ? "border-line bg-surface-sunken text-ink"
+          : "untestable-mark border-transparent text-ink-soft",
+      ].join(" ")}
+    >
+      {skill}
+      <button
+        type="button"
+        aria-label={`Remove ${skill}`}
+        disabled={edit.isPending}
+        onClick={() => edit.mutate({ label: skill, present: false })}
+        className="text-ink-faint hover:text-contested"
+      >
+        ✕
+      </button>
+    </span>
+  );
+}
+
+/**
  * Add a skill we missed, or strike one we invented (FR-1.11, §8.1).
  *
  * A student-added skill lands in `unresolved_skills` and never in
@@ -429,28 +559,8 @@ export function SkillChipEditor({ resume }: { resume: Resume }) {
       <Panel className="px-4 py-3">
         <div className="flex flex-wrap gap-1.5">
           {resume.parsed_skills.map((skill) => {
-            const mapped = skill in resume.resolved_concepts;
             return (
-              <span
-                key={skill}
-                className={[
-                  "inline-flex items-center gap-1 rounded border px-2 py-0.5 text-sm",
-                  mapped
-                    ? "border-line bg-surface-sunken text-ink"
-                    : "untestable-mark border-transparent text-ink-soft",
-                ].join(" ")}
-              >
-                {skill}
-                <button
-                  type="button"
-                  aria-label={`Remove ${skill}`}
-                  disabled={edit.isPending}
-                  onClick={() => edit.mutate({ label: skill, present: false })}
-                  className="text-ink-faint hover:text-contested"
-                >
-                  ✕
-                </button>
-              </span>
+              <SkillChip key={skill} resume={resume} skill={skill} />
             );
           })}
           {resume.parsed_skills.length === 0 && (

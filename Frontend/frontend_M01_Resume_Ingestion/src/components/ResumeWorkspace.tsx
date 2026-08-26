@@ -44,6 +44,7 @@ import type { Filter, GroupBy } from "./ClaimRail";
 import { RedFlagPanel } from "./RedFlagBanner";
 import { SECTION_LABEL, SECTION_STAKE } from "./sections";
 import { ScanSourceNote, SkillPanel } from "./SkillSet";
+import { PageRedactionNote, PdfHighlightViewer } from "./PdfHighlightViewer";
 import { RedactionNote, SourceHighlight } from "./SourceHighlight";
 import { Btn, Empty, Panel, Section, SkeletonRows } from "../ui/primitives";
 import type { Resume, ResumeClaim, SectionKind, SourceSpan } from "../types";
@@ -60,6 +61,9 @@ export function ResumeWorkspace({
   const [spans, setSpans] = useState<SourceSpan[]>([]);
   const [groupBy, setGroupBy] = useState<GroupBy>("risk");
   const [filter, setFilter] = useState<Filter>(null);
+  // The page view is the default when there IS a page; `usePages` answers
+  // empty for a pasted resume and the viewer falls back on its own.
+  const [view, setView] = useState<"page" | "text">("page");
 
   const claims = useMemo(() => listing.data?.claims ?? [], [listing.data]);
 
@@ -96,29 +100,57 @@ export function ResumeWorkspace({
     <>
       <div className="flex shrink-0 items-baseline justify-between gap-2 px-4 pt-4 pb-2">
         <p className="rule-label">{spans.length > 0 ? "The words this came from" : "What we read"}</p>
-        {spans.length > 0 && (
+        <span className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => {
-              setSpans([]);
-              setSelectedId(null);
-            }}
+            onClick={() => setView(view === "page" ? "text" : "page")}
             className="provenance hover:text-ink-soft"
           >
-            clear
+            {view === "page" ? "as text" : "as the page"}
           </button>
-        )}
+          {spans.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setSpans([]);
+                setSelectedId(null);
+              }}
+              className="provenance hover:text-ink-soft"
+            >
+              clear
+            </button>
+          )}
+        </span>
       </div>
       <div className="min-h-0 flex-1 px-4">
-        <SourceHighlight
-          fill
-          text={resume.redacted_text}
-          spans={spans}
-          sections={resume.sections}
-        />
+        {/* §8.3's four-hour feature. The text view is not a lesser fallback —
+            it carries exactly the same offsets — but a student looking at
+            their OWN page, with the box drawn on it, does not have to be
+            persuaded that we read their document. */}
+        {view === "page" ? (
+          <PdfHighlightViewer
+            resumeId={resume.id}
+            spans={spans}
+            fallback={
+              <SourceHighlight
+                fill
+                text={resume.redacted_text}
+                spans={spans}
+                sections={resume.sections}
+              />
+            }
+          />
+        ) : (
+          <SourceHighlight
+            fill
+            text={resume.redacted_text}
+            spans={spans}
+            sections={resume.sections}
+          />
+        )}
       </div>
       <div className="shrink-0 px-4 pt-2 pb-4">
-        <RedactionNote />
+        {view === "page" ? <PageRedactionNote /> : <RedactionNote />}
         {/* The three "how was this read / who can see it" screens. They were
             ghost buttons above the diagnosis, competing with it for the first
             thing a student looks at. They belong beside the document, because

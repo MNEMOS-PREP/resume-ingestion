@@ -61,7 +61,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
@@ -101,7 +101,9 @@ from .retention import Disclosure, ShareGrant
 from .revisions import ALLOWED as ALLOWED_CORRECTIONS
 from .revisions import apply_correction, diff_claims
 from .rewrite import RewriteSuggestion, suggest_grounded
+from .storage import get_bytes as source_bytes
 from .storage import put as store_artifact
+from .storage import put_bytes as store_source
 
 log = logging.getLogger("uvicorn.error")
 
@@ -319,6 +321,7 @@ def _ingest(
     *,
     filename: str | None = None,
     principal: Principal | None = None,
+    source: bytes | None = None,
 ) -> Resume:
     """The pipeline, once, for a document that has already been read.
 
@@ -473,12 +476,28 @@ def _ingest(
     # artifact it was extracted from, and neutralisation is a display concern.
     digest, storage_uri = store_artifact(original, candidate_id=str(candidate_id))
 
+    # And the FILE, when there was one (FR-1.2).
+    #
+    # The line above stores the extracted TEXT under the digest of that text.
+    # That is a derivative, so "keyed by SHA-256 of contents" was true of the
+    # wrong artifact and the upload itself was discarded — which is why §8.3's
+    # highlight over the original page could not be built: there was no page.
+    source_sha256 = ""
+    source_uri = ""
+    if source:
+        suffix = "pdf" if document.mime == "application/pdf" else "docx"
+        source_sha256, source_uri = store_source(
+            source, suffix=suffix, candidate_id=str(candidate_id)
+        )
+
     resume = Resume(
         candidate_id=candidate_id,
         raw_text=original,
         redacted_text=redacted,
         content_sha256=digest,
         storage_uri=storage_uri,
+        source_sha256=source_sha256,
+        source_uri=source_uri,
         parsed_skills=parsed,
         resolved_concepts=concepts_by_label,
         concept_source=concept_source,
@@ -704,7 +723,14 @@ async def upload_resume(
             detail={"code": error.code, "message": error.message, "fallback": "text"},
         ) from error
     return ResumeOut.of(
-        _ingest(session, candidate_id, document, filename=file.filename, principal=principal)
+        _ingest(
+            session,
+            candidate_id,
+            document,
+            filename=file.filename,
+            principal=principal,
+            source=data,
+        )
     )
 
 
@@ -1439,6 +1465,144 @@ def start_drill(
     )
 
 
+class ResumePage(BaseModel):
+    """One page of the original, and the size its boxes are measured in.
+
+    `SourceSpan.bbox` is in PDF points against this page, so a client that
+    wants to draw a highlight over the rendered image needs both numbers to
+    scale by. Returning them is what stops the frontend hardcoding 72dpi.
+    """
+
+    page: int
+    width: float
+    height: float
+
+
+@router.get("/resumes/{resume_id}/pages", response_model=list[ResumePage], tags=["meta"])
+def list_pages(resume_id: uuid.UUID, session: Session = Depends(get_db)):
+    """The pages of the original document, with their size in points.
+
+    Empty for the paste path, which never had a page. §8.2's `PdfHighlightViewer`
+    row asks for *"Original not available (pasted text)"* as a real state rather
+    than an error, and an empty list is how a client knows to show it.
+    """
+    resume = _require(session, resume_id)
+    document = _source_document(resume)
+    if document is None:
+        return []
+    return [
+        ResumePage(page=index + 1, width=width, height=height)
+        for index, (width, height) in enumerate(document["sizes"])
+    ]
+
+
+@router.get("/resumes/{resume_id}/pages/{page}", tags=["meta"])
+def render_page(
+    resume_id: uuid.UUID,
+    page: int,
+    zoom: float = Query(2.0, ge=1.0, le=4.0),
+    session: Session = Depends(get_db),
+):
+    """The page as a PNG, with the contact block painted out.
+
+    ── Why this renders on the server (FR-1.17) ────────────────────────────────
+
+    §8.1 names a `PdfHighlightViewer` and the obvious build is pdf.js over the
+    original bytes. That cannot happen: the original is the UNREDACTED
+    artifact, and handing it to a browser is handing back the exact document
+    the contact isolation exists to keep in one place. A student's phone number
+    would leave the module in service of drawing a box on it.
+
+    So the page is rasterised here, with filled rectangles over every masked
+    range first. What leaves is an image that never contained the contact
+    block — the same guarantee `redacted_text` gives, in pixels.
+
+    ── Where the rectangles come from ──────────────────────────────────────────
+
+    Not from re-deriving the contact: from `redacted_text` itself. It is the
+    same length as the original character for character, so a run of the mask
+    character IS a masked range, and mapping those offsets through the same
+    geometry the spans use gives the boxes. That means the image can never
+    disagree with the text about what was hidden, which a second derivation
+    could.
+    """
+    resume = _require(session, resume_id)
+    document = _source_document(resume)
+    if document is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "No original document for this resume — it was pasted as text, or the "
+                "stored file has been deleted. The text view carries the same spans."
+            ),
+        )
+    if page < 1 or page > len(document["sizes"]):
+        raise HTTPException(status_code=404, detail="No such page in this document.")
+
+    try:
+        png = documents.render_page(
+            document["data"],
+            page - 1,
+            zoom=zoom,
+            redact=_masked_boxes(resume, document["geometry"], page),
+        )
+    except Exception as error:  # noqa: BLE001 - a render failure is a degradation
+        log.info("M01 page render failed for %s: %s", resume_id, error)
+        raise HTTPException(
+            status_code=503,
+            detail="Could not render that page. The text view still works.",
+        ) from error
+
+    return Response(
+        content=png,
+        media_type="image/png",
+        # Content-addressed: the same file and the same zoom is the same image.
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
+
+
+def _source_document(resume: Resume) -> dict | None:
+    """The stored upload, parsed for geometry. None when there is not one.
+
+    Re-parsed rather than cached because the parse is deterministic and the
+    offsets have to line up with the spans already stored — deriving them a
+    second way is how an image and a highlight start disagreeing.
+    """
+    if not resume.source_sha256 or resume.mime != "application/pdf":
+        return None
+    suffix = "pdf"
+    data = source_bytes(resume.source_sha256, suffix=suffix)
+    if data is None:
+        return None
+    try:
+        parsed = documents.parse(data, resume.filename)
+    except IntakeError:
+        return None
+    return {"data": data, "geometry": parsed, "sizes": parsed.page_sizes}
+
+
+#: The character `redact()` masks with. A run of it is a hidden range.
+_MASK = "█"
+
+
+def _masked_boxes(
+    resume: Resume, geometry: documents.Document, page: int
+) -> list[tuple[float, float, float, float]]:
+    """Every rectangle on this page that has to be painted before rendering."""
+    boxes: list[tuple[float, float, float, float]] = []
+    text = resume.redacted_text
+    start = None
+    for index, character in enumerate(text + " "):
+        if character == _MASK and start is None:
+            start = index
+        elif character != _MASK and start is not None:
+            at, box = geometry.geometry_for(start, index)
+            if box is not None and at == page:
+                boxes.append(box)
+            start = None
+    return boxes
+
+
 # ---------------------------------------------------------------------------
 #  Versions (FR-1.15)
 # ---------------------------------------------------------------------------
@@ -1504,6 +1668,8 @@ def delete_resume(resume_id: uuid.UUID, session: Session = Depends(get_db)):
     """
     resume = _require(session, resume_id)
     digest = resume.content_sha256
+    source_digest = resume.source_sha256
+    source_suffix = "pdf" if resume.mime == "application/pdf" else "docx"
 
     contact = session.get(ResumeContact, resume_id)
     if contact:
@@ -1518,6 +1684,20 @@ def delete_resume(resume_id: uuid.UUID, session: Session = Depends(get_db)):
         from .storage import remove
 
         remove(digest)
+
+    # And the uploaded FILE. Two blobs per resume now — the extracted text and
+    # the document it came from — and a delete that removed one of them would
+    # leave the student's actual PDF on disk after they asked us to forget it.
+    # Same shared-blob check: two students who uploaded identical bytes are one
+    # object, and the second one's deletion must not take the first one's file.
+    if source_digest:
+        still_used = session.exec(
+            select(Resume).where(Resume.source_sha256 == source_digest)
+        ).first()
+        if still_used is None:
+            from .storage import remove_bytes
+
+            remove_bytes(source_digest, suffix=source_suffix)
     return None
 
 

@@ -34,6 +34,7 @@ export { ClaimCard } from "./components/ClaimCard";
 export { BANDS, BAND_ORDER, BandChip } from "./components/bands";
 export { RedFlagBanner, RedFlagPanel } from "./components/RedFlagBanner";
 export { SourceHighlight, RedactionNote } from "./components/SourceHighlight";
+export { PdfHighlightViewer, PageRedactionNote } from "./components/PdfHighlightViewer";
 export { ContactPanel } from "./components/ContactPanel";
 export { DrillPanel } from "./components/DrillPanel";
 export { DateEditor } from "./components/DateEditor";
@@ -56,6 +57,8 @@ export {
   useDeleteClaim,
   useDeleteResume,
   useStartDrill,
+  usePages,
+  pageImageUrl,
   useDeps,
   useDisclosure,
   useEditClaim,
@@ -89,6 +92,7 @@ export type {
   ResumeClaim,
   ResumeContact,
   ResumeEventRow,
+  ResumePageInfo,
   RedFlag,
   RedFlagListing,
   RetentionPolicy,

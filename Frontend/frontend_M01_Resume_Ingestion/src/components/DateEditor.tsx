@@ -59,7 +59,7 @@ export function DateEditor({ resume }: { resume: Resume }) {
   );
 }
 
-function DateRow({
+export function DateRow({
   resumeId,
   index,
   range,

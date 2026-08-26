@@ -115,6 +115,10 @@ class Document:
     ocr_used: bool = False
     #: Pages beyond `config.MAX_PAGES` that were not read (§6.1, EC-1.5).
     pages_skipped: int = 0
+    #: (width, height) in POINTS, per page read. What `SourceSpan.bbox` is
+    #: measured against, so a client drawing a highlight over a rendered image
+    #: can work out the scale instead of assuming 72dpi.
+    page_sizes: list[tuple[float, float]] = field(default_factory=list)
     #: Student-facing sentences: what we noticed, in words they can act on.
     notes: list[str] = field(default_factory=list)
     #: EC-1.6. Every lexicon in this module is English; a resume that is not
@@ -679,11 +683,13 @@ def parse_pdf(data: bytes) -> Document:
     line_styles: dict[int, LineStyle] = {}
     columns_seen = 1
     confidences: list[float] = []
+    page_sizes: list[tuple[float, float]] = []
     offset = 0
 
     for number in range(read_pages):
         page = document[number]
         rect = page.rect
+        page_sizes.append((rect.width, rect.height))
         # (x0, y0, x1, y1, word, block_no, line_no, word_no)
         raw = page.get_text("words")
         boxes = [(w[0], w[1], w[2], w[3]) for w in raw]
@@ -775,6 +781,7 @@ def parse_pdf(data: bytes) -> Document:
         columns=columns_seen,
         column_confidence=column_confidence,
         pages_skipped=total_pages - read_pages,
+        page_sizes=page_sizes,
         notes=notes,
     )
 
@@ -1192,3 +1199,46 @@ def from_text(text: str) -> Document:
         # still looks like a broken parser rather than a wrong lexicon.
         notes=list(_language_notes(language)),
     )
+
+
+def render_page(
+    data: bytes,
+    index: int,
+    *,
+    zoom: float = 2.0,
+    redact: list[tuple[float, float, float, float]] | None = None,
+) -> bytes:
+    """One page of a PDF as a PNG, with `redact` rectangles painted out first.
+
+    ── Why this exists in the module and not in the browser (FR-1.17) ──────────
+
+    §8.1 asks for a viewer that draws a claim's `bbox` over the rendered page,
+    and the obvious build is pdf.js over the original bytes. That would send the
+    UNREDACTED document to a browser — the exact artifact the contact isolation
+    exists to keep in one place — so a student's phone number would leave the
+    module in service of drawing a box on it.
+
+    Rasterising here inverts that. The rectangles are filled BEFORE the pixmap
+    is taken, so the bytes that leave never contained the contact block at any
+    point: not hidden behind an overlay a client could remove, not present in a
+    layer, absent. It is the same promise `redacted_text` makes, in pixels.
+
+    Filled black rather than white, deliberately. §8.3's redaction note explains
+    the block characters in the text view, and a page whose email is a black bar
+    reads as "we hid this" where a white gap reads as "the parser lost this".
+    """
+    try:
+        import pymupdf
+    except ImportError as error:
+        raise IntakeError(
+            "no_pdf_library",
+            "This deployment cannot render PDF pages. The text view still works.",
+            status=503,
+        ) from error
+
+    with pymupdf.open(stream=data, filetype="pdf") as document:
+        page = document[index]
+        for box in redact or []:
+            page.draw_rect(pymupdf.Rect(*box), color=(0, 0, 0), fill=(0, 0, 0), overlay=True)
+        pixmap = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), alpha=False)
+        return pixmap.tobytes("png")

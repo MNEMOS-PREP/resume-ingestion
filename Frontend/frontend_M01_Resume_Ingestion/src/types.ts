@@ -248,6 +248,8 @@ export interface Resume {
   red_flags: RedFlag[];
   entities: Entities;
   storage_uri: string;
+  /** SHA-256 of the uploaded FILE. Empty for the paste path. */
+  source_sha256: string;
   filename: string | null;
   mime: string;
   page_count: number;
@@ -614,4 +616,17 @@ export interface DrillHandoff {
   session_url: string | null;
   needs_module: string | null;
   explanation: string | null;
+}
+
+/**
+ * `GET /v1/resumes/{id}/pages` — one page of the original, in POINTS.
+ *
+ * `SourceSpan.bbox` is measured against these numbers, so a client drawing a
+ * highlight over the rendered image scales by `renderedWidth / width` rather
+ * than assuming the server's zoom.
+ */
+export interface ResumePageInfo {
+  page: number;
+  width: number;
+  height: number;
 }
