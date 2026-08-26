@@ -104,7 +104,10 @@ _LEADING_NOISE = re.compile(
     r"working|solid\s+grasp\s+of|hands[-\s]?on|proficiency\s+(?:in|with)|"
     r"proficient\s+(?:in|with)|experience\s+(?:with|in|of)|familiarity\s+with|"
     r"knowledge\s+of|understanding\s+of|exposure\s+to|expertise\s+in|"
-    r"comfortable\s+with|fluent\s+in|grasp\s+of)\s+",
+    r"comfortable\s+with|fluent\s+in|grasp\s+of|"
+    # "programming skills in Java", "coding background with Python". The run-up
+    # is about the student's relationship to the thing; the thing is the label.
+    r"(?:\w+\s+)?skills?\s+(?:in|with)|(?:\w+\s+)?background\s+(?:in|with))\s+",
     re.IGNORECASE,
 )
 
@@ -223,7 +226,11 @@ def _split_conjunctions(label: str) -> list[str]:
     parts = re.split(r"\s+(?:and|or)\s+", label, flags=re.IGNORECASE)
     if len(parts) < 2:
         return []
-    return [p.strip() for p in parts if p.strip() and len(p.split()) <= 3]
+    # Cleaned BEFORE the length cap. "programming skills in Java" is four words
+    # and was dropped for it; the four words are a run-up to one, and peeling
+    # the run-up first is the difference between reading Java and losing it.
+    cleaned = [_clean(part) for part in parts]
+    return [part for part in cleaned if part and len(part.split()) <= 3]
 
 
 def _rejoin_wrapped(lines: list[str]) -> list[str]:
@@ -303,11 +310,29 @@ def extract_surface_forms(text: str) -> list[str]:
     for line in _list_lines(text):
         for fragment in _DELIMITERS.split(line):
             cleaned = _clean(fragment)
-            if not _acceptable(cleaned):
+            if _acceptable(cleaned):
+                add(cleaned)
+                for part in _split_conjunctions(cleaned):
+                    add(part)
                 continue
-            add(cleaned)
+
+            # Too long to BE a label, which does not mean it contains none.
+            # "Programming skills in Java and Python" cleans to six words,
+            # `_acceptable` refuses it for the cap, and both languages the
+            # student listed went with it — their own skills line, extracting
+            # nothing, with no error anywhere.
+            #
+            # A part rescued this way must look like a NAME, because this is
+            # also where prose lives: splitting a resume bullet on "and" cuts
+            # it into pieces short enough to pass the cap, and "enjoys
+            # mentoring juniors" became a skill in M02 before this guard went
+            # in. A skill we missed is visible to the student as a thin list;
+            # one we invented becomes an interview question about something
+            # they never claimed, and §6.4's whole point is that the second is
+            # far worse.
             for part in _split_conjunctions(cleaned):
-                add(part)
+                if any(character.isupper() for character in part):
+                    add(part)
 
     return forms
 

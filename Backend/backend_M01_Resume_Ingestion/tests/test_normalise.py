@@ -231,3 +231,35 @@ def test_a_phrase_whose_words_resolved_is_still_dropped():
     from backend_M01_Resume_Ingestion.extract import drop_redundant
 
     assert drop_redundant(["SQL and indexing"], ["SQL"]) == []
+
+
+def test_a_run_up_is_peeled_before_the_length_cap():
+    """ "Proficiency in Java and Python" must give Java and Python, not one.
+
+    `_split_conjunctions` capped each part at three words BEFORE cleaning it,
+    so a part like "programming skills in Java" was dropped for being four —
+    four words that are a run-up to one. Peeling first is the difference
+    between reading the language and losing it.
+    """
+    from backend_M01_Resume_Ingestion.extract import extract_surface_forms
+
+    forms = extract_surface_forms("SKILLS\nProficiency in Java and Python\n")
+
+    assert "Java" in forms and "Python" in forms
+
+
+def test_a_project_bullet_is_still_not_a_skills_list():
+    """The guard that has to survive every extraction change.
+
+    A resume bullet split on "and" produces pieces short enough to pass the
+    word cap, and a skill invented out of one becomes an interview question
+    about something the student never claimed.
+    """
+    from backend_M01_Resume_Ingestion.extract import extract_surface_forms
+
+    assert (
+        extract_surface_forms(
+            "PROJECTS\n- Built a system that scales well and handles failure gracefully\n"
+        )
+        == []
+    )
