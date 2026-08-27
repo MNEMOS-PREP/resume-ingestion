@@ -1,8 +1,19 @@
 /**
  * M01 - Resume Ingestion & Claim Extraction · routes.
  *
- * Eight screens, and two of them are there because a fact with no surface is a
- * fact nobody can check:
+ * Nine screens. Two are there because a fact with no surface is a fact nobody
+ * can check, and one is there because two modules that never linked to each
+ * other are two products:
+ *
+ *   /resumes/:id/target       a resume alone answers "what have I claimed". A
+ *                             resume against a POSTING answers "will this get
+ *                             me in", which is the question the student came
+ *                             with — and it lives in M02, which until now had
+ *                             no path leading to it. Asked as a question with
+ *                             a real second answer, because FR-1.14's principle
+ *                             runs both ways: somebody who uploaded a resume to
+ *                             fix their resume should not be pushed into a
+ *                             job-matching flow they did not ask for.
  *
  *   /skipped                  FR-1.14 is a P0 - "allow the entire product to be
  *                             used with no resume at all" - and a Skip button
@@ -32,11 +43,13 @@ import { IngestPage, SkippedPage } from "./components/IngestPage";
 import { PrivacyPage } from "./components/PrivacyPage";
 import { QualityPage } from "./components/QualityPage";
 import { ResumePage } from "./components/ResumePage";
+import { TargetJobPage } from "./components/TargetJobPage";
 
 export const m01Routes = (
   <Route key="m01">
     <Route index element={<IngestPage />} />
     <Route path="/resumes/:resumeId" element={<ResumePage />} />
+    <Route path="/resumes/:resumeId/target" element={<TargetJobPage />} />
     <Route path="/resumes/:resumeId/diff" element={<DiffPage />} />
     <Route path="/resumes/:resumeId/audit" element={<AuditPage />} />
     <Route path="/resumes/:resumeId/privacy" element={<PrivacyPage />} />

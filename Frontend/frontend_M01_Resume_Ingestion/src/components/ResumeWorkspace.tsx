@@ -74,8 +74,11 @@ export function ResumeWorkspace({
 
   const visible = useMemo(() => {
     if (!filter) return claims;
-    if (filter.by === "risk") return claims.filter((c) => c.risk_band === filter.band);
-    return claims.filter((c) => (kindOf.get(c.section_id) ?? "unknown") === filter.kind);
+    if (filter.by === "risk")
+      return claims.filter((c) => c.risk_band === filter.band);
+    return claims.filter(
+      (c) => (kindOf.get(c.section_id) ?? "unknown") === filter.kind,
+    );
   }, [claims, filter, kindOf]);
 
   function select(claim: ResumeClaim) {
@@ -99,7 +102,9 @@ export function ResumeWorkspace({
   const document = (
     <>
       <div className="flex shrink-0 items-baseline justify-between gap-2 px-4 pt-4 pb-2">
-        <p className="rule-label">{spans.length > 0 ? "The words this came from" : "What we read"}</p>
+        <p className="rule-label">
+          {spans.length > 0 ? "The words this came from" : "What we read"}
+        </p>
         <span className="flex items-center gap-3">
           <button
             type="button"
@@ -156,13 +161,22 @@ export function ResumeWorkspace({
             thing a student looks at. They belong beside the document, because
             all three are questions about the document. */}
         <p className="provenance mt-2 flex flex-wrap gap-x-3 gap-y-1">
-          <Link to={`/resumes/${resume.id}/audit`} className="hover:text-ink-soft">
+          <Link
+            to={`/resumes/${resume.id}/audit`}
+            className="hover:text-ink-soft"
+          >
             how this was read
           </Link>
-          <Link to={`/resumes/${resume.id}/diff`} className="hover:text-ink-soft">
+          <Link
+            to={`/resumes/${resume.id}/diff`}
+            className="hover:text-ink-soft"
+          >
             what changed
           </Link>
-          <Link to={`/resumes/${resume.id}/privacy`} className="hover:text-ink-soft">
+          <Link
+            to={`/resumes/${resume.id}/privacy`}
+            className="hover:text-ink-soft"
+          >
             who can see this
           </Link>
         </p>
@@ -206,33 +220,70 @@ export function ResumeWorkspace({
             <ScanSourceNote scannedAgainst={resume.scanned_against} />
           </div>
 
+          {/* The way out of this module.
+              A resume alone answers "what have I claimed". A resume against a
+              POSTING answers "will this get me in", which is the question the
+              student arrived with — and it lives in M02, which until now had
+              nothing pointing at it. Finishing an ingest left you on a claim
+              map with nowhere to go. */}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-brand-line bg-brand-soft px-4 py-3">
+            <p className="text-sm text-ink">
+              <span className="font-medium">
+                Aiming this at a specific job?
+              </span>{" "}
+              Paste the posting and we will check the eligibility bar, what your
+              resume evidences, and how a mock for it should spend its time.
+            </p>
+            <Link
+              to={`/resumes/${resume.id}/target`}
+              className="shrink-0 text-sm font-medium text-brand hover:text-brand-hover"
+            >
+              Check against a job &rarr;
+            </Link>
+          </div>
+
           {/* The same movement `j` and `k` do, for the people who will never
               find out that `j` and `k` do it. §8.3 asks for the keys and is
               explicit that "power users exist even among students" — which is
               an argument for the keys, not against the buttons. */}
           {visible.length > 0 && (
             <div className="mt-4 flex flex-wrap items-center gap-2">
-              <Btn type="button" variant="secondary" size="sm" onClick={() => step(-1)}>
+              <Btn
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => step(-1)}
+              >
                 &larr; Previous
               </Btn>
-              <Btn type="button" variant="secondary" size="sm" onClick={() => step(1)}>
+              <Btn
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => step(1)}
+              >
                 Next &rarr;
               </Btn>
               <span className="provenance" data-numeric>
-                {at < 0 ? `${visible.length} claims` : `${at + 1} of ${visible.length}`}
+                {at < 0
+                  ? `${visible.length} claims`
+                  : `${at + 1} of ${visible.length}`}
               </span>
             </div>
           )}
         </header>
 
-        {filter?.by === "section" && <SectionBrief kind={filter.kind} claims={visible} />}
+        {filter?.by === "section" && (
+          <SectionBrief kind={filter.kind} claims={visible} />
+        )}
 
         {listing.isLoading && <SkeletonRows rows={6} />}
 
         {listing.data && claims.length === 0 && (
           <Empty title="No claims yet">
-            Nothing here asserts something an interviewer could push on. Add a project bullet that
-            says what you built and what changed, and it will show up here.
+            Nothing here asserts something an interviewer could push on. Add a
+            project bullet that says what you built and what changed, and it
+            will show up here.
           </Empty>
         )}
 
@@ -261,15 +312,19 @@ export function ResumeWorkspace({
               <Fact label="Pages">{resume.page_count}</Fact>
               <Fact label="Columns">
                 {resume.columns}
-                {resume.columns > 1 && ` · ${Math.round(resume.column_confidence * 100)}% sure`}
+                {resume.columns > 1 &&
+                  ` · ${Math.round(resume.column_confidence * 100)}% sure`}
               </Fact>
-              <Fact label="Read from an image">{resume.ocr_used ? "yes" : "no"}</Fact>
+              <Fact label="Read from an image">
+                {resume.ocr_used ? "yes" : "no"}
+              </Fact>
               <Fact label="Took">{resume.parse_ms} ms</Fact>
               <Fact label="Parser">{resume.parser_version}</Fact>
             </dl>
             <p className="mt-2.5 text-xs text-ink-faint">
-              Here because a score you cannot trace is a score you cannot argue with. Every claim
-              above points at a range of characters in the document beside it.
+              Here because a score you cannot trace is a score you cannot argue
+              with. Every claim above points at a range of characters in the
+              document beside it.
             </p>
           </Panel>
         </Section>
@@ -295,7 +350,13 @@ export function ResumeWorkspace({
  * ask me about this section"* - it is not a new computation, it is the ladders
  * M01 already generated for each claim, added up.
  */
-function SectionBrief({ kind, claims }: { kind: SectionKind; claims: ResumeClaim[] }) {
+function SectionBrief({
+  kind,
+  claims,
+}: {
+  kind: SectionKind;
+  claims: ResumeClaim[];
+}) {
   const risky = claims.filter((claim) => claim.risk_band === "risky").length;
   const probes = claims.reduce((sum, claim) => sum + claim.probes.length, 0);
   const stake = SECTION_STAKE[kind];
@@ -314,7 +375,13 @@ function SectionBrief({ kind, claims }: { kind: SectionKind; claims: ResumeClaim
   );
 }
 
-function Fact({ label, children }: { label: string; children: React.ReactNode }) {
+function Fact({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex items-baseline justify-between gap-3 border-b border-line py-1 last:border-0">
       <dt className="text-ink-soft">{label}</dt>
