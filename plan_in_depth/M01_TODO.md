@@ -1,5 +1,10 @@
 # M01 — TODO
 
+
+> **Completion: 92%** — 17 of 20 functional requirements met, 3 partially. From this module's own audited FR table. Functional requirements are not the whole spec: the acceptance gates, edge cases and screens are tracked separately below, and the remaining work is not spread evenly across them.
+>
+> _Method: `(met + ½ × partial) ÷ total`, from the FR table below, 2026-08-28. One measure applied the same way to all nineteen modules so they compare; it counts requirements, not screens or gates._
+
 Task list for taking **M01 Resume Ingestion & Claim Extraction** to 100% of
 [M01_Resume_Ingestion.md](M01_Resume_Ingestion.md).
 
