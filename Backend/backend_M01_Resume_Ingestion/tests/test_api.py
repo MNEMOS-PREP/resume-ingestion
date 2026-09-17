@@ -245,6 +245,75 @@ def test_the_drill_answers_even_though_m06_does_not_exist(client, m04_up):
     assert body["questions"] == [p["question"] for p in data["claims"][0]["probes"]]
 
 
+def test_the_drill_forwards_the_students_identity_to_m06(client, m04_up, monkeypatch):
+    """M06 refuses an anonymous caller, so the hand-off has to say who it is for.
+
+    It sent `Content-Type` and nothing else, which M06's `enforce_access`
+    answers with 403 — and this module would have reported that as "the
+    interview engine did not accept the drill", pointing at the wrong module.
+    There is no `service` role in `ai_core.identity`; the student is forwarded,
+    exactly as M02 forwards them when it calls here.
+    """
+    import json
+    import time
+    import urllib.request
+
+    from backend_M01_Resume_Ingestion import router as router_module
+
+    class Reply:
+        """The slice of a response the router reads. (`tests/` is not a
+        package here, so conftest's copy cannot be imported.)"""
+
+        def __init__(self, payload):
+            self._body = json.dumps(payload).encode("utf-8")
+            self.status = 200
+
+        def read(self):
+            return self._body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    m04_up()
+    data = _ingest(client, DRILLABLE)
+    claim_id = data["claims"][0]["id"]
+
+    registry = router_module.dependency_registry()
+    registry._cache["M06"] = (time.monotonic(), True, "healthy (test)")
+
+    seen: dict = {}
+    m04_urlopen = urllib.request.urlopen
+
+    def fake(request, timeout=None):
+        url = request.full_url
+        if not url.startswith("http://127.0.0.1:8106"):
+            return m04_urlopen(request, timeout=timeout)
+        seen["url"] = url
+        seen["headers"] = {k.lower(): v for k, v in request.header_items()}
+        seen["body"] = json.loads(request.data.decode("utf-8"))
+        return Reply({"session_id": str(uuid.uuid4()), "url": "/mock/session"})
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake)
+
+    res = client.post(f"/v1/resumes/{data['id']}/claims/{claim_id}/drill")
+
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["available"] is True, body
+    assert body["session_url"] == "/mock/session"
+    assert seen["url"].endswith("/v1/drills")
+    assert seen["headers"]["x-role"] == "student"
+    assert seen["headers"]["x-candidate-id"] == data["candidate_id"]
+    # And the claim itself still goes over, ladder and all.
+    assert seen["body"]["claim_id"] == claim_id
+    assert [p["depth"] for p in seen["body"]["probes"]] == [
+        p["depth"] for p in data["claims"][0]["probes"]
+    ]
+
+
 def test_a_drill_on_a_claim_that_is_not_there_is_a_404(client, m04_up):
     """The one case that IS an error. A missing upstream degrades; a claim id
     that does not exist is the caller being wrong."""

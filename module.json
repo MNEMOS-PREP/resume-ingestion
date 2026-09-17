@@ -36,7 +36,7 @@
     {
       "module": "M06",
       "name": "Mock Interview Engine",
-      "repo": "https://github.com/MNEMOS-PREP/mock-interview-engine",
+      "repo": "https://github.com/MNEMOS-PREP/Mock_Interview_Engine",
       "reason": "runs the 2-minute defend drill a student starts from a risky claim (§2.3 Screen 5). AC-1.8 - the share of students who run one - is this module's stated KPI",
       "on_missing": "Practising a claim — needs M06 Mock Interview Engine. The questions on each card are the ones it would ask you, and nothing else on the Claim Map is affected.",
       "base_url": "http://127.0.0.1:8106",

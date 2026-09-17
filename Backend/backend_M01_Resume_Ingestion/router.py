@@ -1430,7 +1430,16 @@ def start_drill(
                     ],
                 }
             ).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                # M06 gates every candidate-scoped route on `ai_core.identity`
+                # and refuses an anonymous caller — rightly: a drill is about
+                # one student's resume claim. There is no `service` role and
+                # this does not invent one; it forwards the student, exactly as
+                # M02 does when it calls this module.
+                "X-Role": "student",
+                "X-Candidate-Id": str(resume.candidate_id),
+            },
         )
         with urllib.request.urlopen(request, timeout=5.0) as response:
             body = json.loads(response.read())
