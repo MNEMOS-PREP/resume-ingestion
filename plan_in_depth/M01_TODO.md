@@ -22,6 +22,18 @@ Legend: ✅ done · 🟡 partly done · ⬜ not started
 
 ---
 
+### 2026-10-02 — Platform_Core v0.11.0, and the shared guard
+
+- ✅ Both halves move to Platform_Core **v0.11.0**: the backend from v0.9.0
+  (the lock file pins v0.11.0's commit), and the frontend from v0.9.1.
+- ✅ The router guard is Platform_Core's **`candidate_guard`**, replacing this
+  module's hand-written copy; M02 and M06 replaced theirs the same day. What
+  stays here is the resume-to-student lookup, read through `get_db` so the
+  test override still applies. Since v0.11.0 the guard also reads a student
+  named in the query.
+- ✅ `test_access.py` adds the shared stranger check from the OpenAPI
+  document, beside the hand-written checks with a real resume behind the id.
+
 ## 0. Ideas and scouting
 
 Things worth building that did not come from the spec — usually from reading

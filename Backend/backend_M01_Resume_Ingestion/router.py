@@ -49,7 +49,8 @@ from typing import Any
 
 from ai_core.concepts import normalise_alias
 from ai_core.dependencies import DependencyRegistry, DependencyStatus
-from ai_core.identity import Principal, may_see, principal_from_headers
+from ai_core.guard import candidate_guard, require_candidate
+from ai_core.identity import Principal
 from fastapi import (
     APIRouter,
     Depends,
@@ -119,32 +120,30 @@ def enforce_access(request: Request, session: Session = Depends(get_db)) -> Prin
     """Who is asking, and may they have what this route is about?
 
     Declared once, on the ROUTER, so it runs on every endpoint in this module
-    including the ones nobody has written yet. That is deliberate and it is the
-    whole design: `ai_core.identity` makes the check one call precisely because
-    a per-route check is one somebody omits on the sixteenth endpoint, and the
-    sixteenth endpoint is the one that leaks. A router-level dependency cannot
-    be omitted by forgetting.
+    including the ones nobody has written yet. A per-route check is one
+    somebody omits on the sixteenth endpoint, and the sixteenth endpoint is the
+    one that leaks.
 
-    Two shapes of candidate-scoped route, and both are covered here:
+    **The check itself is Platform_Core's** (`candidate_guard`, v0.11.0) since
+    2026-10-02. This module wrote its own copy first — so did M02 and M06,
+    before Platform_Core had one — and copies drift. What stays here is the one
+    thing only M01 knows: which student a resume belongs to.
+
+    Three shapes of candidate-scoped route, all covered:
 
       /resumes/{resume_id}/...      the resume names its candidate
       /resumes/candidate/{id}       the path names the candidate
+      ?candidate_id=…               the query names them (the guard, v0.11.0)
 
-    Meta routes name neither and are not gated — `/deps`, `/capabilities` and
+    Meta routes name nobody and are not gated — `/deps`, `/capabilities` and
     `/quality` are about the deployment, not about a student. `/quality` in
-    particular is aggregate by construction: counts, rates and failure codes,
-    with nobody named.
+    particular is aggregate by construction.
 
-    Ingest is the exception this cannot reach: `candidate_id` arrives in the
-    BODY, so it is checked in `_ingest` instead. Named here so the gap is a
-    stated one rather than a thing somebody discovers.
+    Ingest names the candidate in the BODY, which this cannot see, so `_ingest`
+    checks it with `require_candidate` — a stated gap rather than a found one.
     """
-    principal = principal_from_headers(dict(request.headers))
 
-    resume_id = request.path_params.get("resume_id")
-    candidate_id = request.path_params.get("candidate_id")
-
-    if resume_id is not None and candidate_id is None:
+    def owner(resume_id: str) -> str | None:
         # `get_db`, not a session of its own. A second engine here bypassed the
         # dependency override every test installs, so the check ran against a
         # database with no tables in it — and the first symptom was forty-six
@@ -152,24 +151,12 @@ def enforce_access(request: Request, session: Session = Depends(get_db)) -> Prin
         try:
             resume = session.get(Resume, uuid.UUID(str(resume_id)))
         except ValueError:
-            return principal
-        if resume is None:
-            # Not this dependency's job to 404, and refusing here would leak
-            # which ids exist to a caller who may not see any of them.
-            return principal
-        candidate_id = str(resume.candidate_id)
+            return None
+        # Unknown: not this dependency's job to 404, and refusing here would
+        # leak which ids exist to a caller who may not see any of them.
+        return str(resume.candidate_id) if resume is not None else None
 
-    if candidate_id is None:
-        return principal
-
-    decision = may_see(principal, str(candidate_id))
-    if not decision:
-        # 403 with the reason, not 404. Pretending the resume does not exist
-        # would be a lie to the student who owns it, and this is the module
-        # whose entire argument is that a fact carries where it came from.
-        raise HTTPException(status_code=403, detail=decision.reason)
-
-    return principal
+    return candidate_guard({"resume_id": owner})(request)
 
 
 router = APIRouter(
@@ -339,9 +326,7 @@ def _ingest(
     Without it a student could upload a resume AS somebody else: not a read
     leak, a write one, and the more surprising of the two.
     """
-    decision = may_see(principal, str(candidate_id))
-    if not decision:
-        raise HTTPException(status_code=403, detail=decision.reason)
+    require_candidate(principal, candidate_id)
 
     started = time.perf_counter()
     original = document.text

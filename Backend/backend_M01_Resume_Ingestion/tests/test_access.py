@@ -211,3 +211,15 @@ def test_the_deployment_routes_are_not_candidate_scoped(anonymous):
     assert anonymous.get("/v1/deps").status_code == 200
     assert anonymous.get("/v1/quality").status_code == 200
     assert anonymous.get("/health").status_code == 200
+
+
+def test_every_route_that_names_a_student_refuses_strangers(anonymous):
+    """Platform_Core's own check (v0.11.0), on the guard that replaced M01's
+    hand-written copy: every route whose path or query names a student, found
+    from the OpenAPI document — so a route added next month is covered by a
+    test written today — asked as nobody and as another student. The resume
+    routes are asked above, with a real resume behind the id."""
+    from ai_core.testing import assert_refuses_strangers
+
+    checked = assert_refuses_strangers(anonymous, app)
+    assert any("/candidate/{candidate_id}" in path for _, path in checked)
