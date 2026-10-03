@@ -22,6 +22,16 @@ Legend: ✅ done · 🟡 partly done · ⬜ not started
 
 ---
 
+### 2026-10-03 — one session for the page (Platform_Core v0.12.0)
+
+- ✅ **`components/candidate.ts` is `@ai/core`'s session in this module's words.** It kept its
+  own id under its own localStorage key and set the page's identity headers
+  itself, as three other modules did, so in Platform_Shell the student was
+  whoever's module loaded last. The shell's sign-in screen sets the session
+  now; standalone signs in as the seeded student only when nobody is. The old
+  key is migrated, so no browser loses its student.
+- ✅ Pinned to v0.12.0 on both halves; the lockfile resolves `9ee259c`.
+
 ### 2026-10-02 — Platform_Core v0.11.0, and the shared guard
 
 - ✅ Both halves move to Platform_Core **v0.11.0**: the backend from v0.9.0
