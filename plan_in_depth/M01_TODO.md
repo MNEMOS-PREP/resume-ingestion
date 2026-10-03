@@ -22,6 +22,16 @@ Legend: ✅ done · 🟡 partly done · ⬜ not started
 
 ---
 
+### 2026-10-03 — `seed.py` is safe to run again
+
+- ✅ It gave every row a random id, so each run added the same two resumes again.
+  Ids are now derived from what is seeded, a row already there — by id or by
+  content, for a database the old script seeded — is left alone, and tables are
+  created first so it works before the module has ever started.
+  `Platform_Shell/start.bat seed` runs it with every other module's.
+- ✅ The model-key loader in `llm.py` reads the `keys.txt` beside the repos
+  (and `AI_KEYS_FILE`), as M02's always has.
+
 ### 2026-10-03 — one session for the page (Platform_Core v0.12.0)
 
 - ✅ **`components/candidate.ts` is `@ai/core`'s session in this module's words.** It kept its

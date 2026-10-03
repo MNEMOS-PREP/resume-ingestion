@@ -78,7 +78,14 @@ def load_keys(*, override: bool = False) -> list[str]:
     is the one everybody already writes by hand.
     """
     here = Path(__file__).resolve()
-    roots = [here.parents[1], here.parents[2]]  # Backend/, repo root
+    # Backend/, the repo root, and the directory the sibling repos live in —
+    # M02's third root, adopted 2026-10-03. One `keys.txt` beside the repos
+    # serves every module; on a fresh demo machine it is the only one there is.
+    # `AI_KEYS_FILE` overrides it for a deployment that mounts its secret.
+    roots = [here.parents[1], here.parents[2], here.parents[3]]
+    override_path = os.getenv("AI_KEYS_FILE")
+    if override_path:
+        roots.insert(0, Path(override_path).expanduser().resolve().parent)
     loaded: list[str] = []
 
     for root in roots:
