@@ -53,7 +53,7 @@ export function TargetJobPage() {
           The id in the URL does not match a stored resume.
           <div className="mt-3">
             <Link
-              to="/"
+              to="/resume"
               className="text-sm font-medium text-brand hover:text-brand-hover"
             >
               Upload one &rarr;

@@ -16,6 +16,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import { PageHeader } from "@ai/core";
+
 import { useCandidateResumes, useCapabilities, useIngestResume, useUploadResume } from "../api";
 import { BANDS } from "./bands";
 import { useCandidateId } from "./candidate-hook";
@@ -50,15 +52,19 @@ export function IngestPage() {
 
   return (
     <>
-      <header className="mb-8">
-        <h1 className="text-display font-semibold text-ink">
-          Let&rsquo;s start with your resume
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm text-ink-soft">
-          We turn it into the claims you would have to defend in an interview &mdash; and show you
-          which lines you cannot actually explain yet, before someone else finds out.
-        </p>
-      </header>
+      <div className="mb-8">
+        <PageHeader
+          title="Let’s start with your resume"
+          subtitle="We find every line an interviewer could ask you to defend — and which ones you can't explain yet."
+          how={
+            <p>
+              Each line is read for what it claims and how hard it would be to back up in an
+              interview. You see the exact words each finding came from, and nothing is shared
+              unless you choose to share it.
+            </p>
+          }
+        />
+      </div>
 
       <Section label="Your resume">
         <ResumeDropzone
@@ -78,15 +84,11 @@ export function IngestPage() {
         />
       </Section>
 
-      <Section label="Already read" meta={`candidate ${candidateId.slice(0, 8)}`}>
+      <Section label="Your resumes">
         {existing.isLoading && <SkeletonRows rows={2} />}
         {existing.data && existing.data.length === 0 && (
           <Panel tone="sunken" className="px-4 py-3">
-            <p className="text-sm text-ink-soft">
-              Nothing yet for this candidate. Add something above, or run{" "}
-              <code className="provenance">Backend/.venv/Scripts/python seed.py</code> for two
-              seeded resumes.
-            </p>
+            <p className="text-sm text-ink-soft">Nothing yet — add your resume above.</p>
           </Panel>
         )}
         {existing.data && existing.data.length > 0 && (
@@ -106,8 +108,8 @@ export function IngestPage() {
                     <span className="truncate text-sm text-ink">
                       {resume.filename ?? "Pasted text"}
                       <span className="ml-2 text-ink-soft" data-numeric>
-                        {resume.claims.length} claim
-                        {resume.claims.length === 1 ? "" : "s"}
+                        {resume.claims.length} line
+                        {resume.claims.length === 1 ? "" : "s"} to defend
                         {risky > 0 && (
                           <>
                             {" · "}
@@ -116,9 +118,9 @@ export function IngestPage() {
                         )}
                       </span>
                     </span>
-                    <span className="provenance shrink-0">
-                      {!resume.is_active && "superseded · "}
-                      {resume.confirmed ? "confirmed" : "unconfirmed"}
+                    <span className="shrink-0 text-xs text-ink-faint">
+                      {!resume.is_active && "older version · "}
+                      {resume.confirmed ? "checked by you" : "not checked yet"}
                     </span>
                   </button>
                 );
@@ -162,7 +164,7 @@ export function SkippedPage() {
               never depended on a resume.
             </li>
             <li>
-              <span className="font-medium text-ink">Building your first claim</span> — describe
+              <span className="font-medium text-ink">Writing your first project line</span> — describe
               one project out loud, and we write the bullet with you rather than for you.
             </li>
           </ul>
@@ -174,7 +176,7 @@ export function SkippedPage() {
       </Section>
 
       <div className="flex gap-3">
-        <Link to="/">
+        <Link to="/resume">
           <Btn type="button" variant="secondary">
             Add a resume after all
           </Btn>

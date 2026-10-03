@@ -48,7 +48,7 @@ export function DiffPage() {
         This is the only resume stored for this candidate, so there is no earlier
         version to diff. Upload a revised copy and this screen will show what moved.
         <div className="mt-3">
-          <Link to="/" className="text-sm font-medium text-brand hover:text-brand-hover">
+          <Link to="/resume" className="text-sm font-medium text-brand hover:text-brand-hover">
             Upload another &rarr;
           </Link>
         </div>

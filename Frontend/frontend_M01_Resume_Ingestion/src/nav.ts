@@ -28,7 +28,7 @@ export interface NavItem {
  * belong to a resume, so they hang off one rather than off the top bar.
  */
 export const M01_NAV: NavItem[] = [
-  { to: "/", label: "Your resume" },
+  { to: "/resume", label: "Your resume" },
   { to: "/quality", label: "Parser quality" },
   { to: "/deps", label: "Dependencies" },
 ];

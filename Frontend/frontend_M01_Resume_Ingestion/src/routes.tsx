@@ -37,7 +37,6 @@
 import { Route } from "react-router-dom";
 
 import { AuditPage } from "./components/AuditPage";
-import { DepsPage } from "./components/DepsPage";
 import { DiffPage } from "./components/DiffPage";
 import { IngestPage, SkippedPage } from "./components/IngestPage";
 import { PrivacyPage } from "./components/PrivacyPage";
@@ -45,9 +44,18 @@ import { QualityPage } from "./components/QualityPage";
 import { ResumePage } from "./components/ResumePage";
 import { TargetJobPage } from "./components/TargetJobPage";
 
+/** Where this module's front door is, standalone and in the shell alike. */
+export const M01_HOME = "/resume";
+
+/*
+  No index route and no /deps (2026-10-04). The index belongs to whoever hosts
+  this tree — the shell's Today, or the standalone app's redirect to
+  M01_HOME — and the shell mounts one /deps for every module. That is what
+  lets Platform_Shell mount this tree whole instead of two screens by name.
+*/
 export const m01Routes = (
   <Route key="m01">
-    <Route index element={<IngestPage />} />
+    <Route path="/resume" element={<IngestPage />} />
     <Route path="/resumes/:resumeId" element={<ResumePage />} />
     <Route path="/resumes/:resumeId/target" element={<TargetJobPage />} />
     <Route path="/resumes/:resumeId/diff" element={<DiffPage />} />
@@ -55,6 +63,5 @@ export const m01Routes = (
     <Route path="/resumes/:resumeId/privacy" element={<PrivacyPage />} />
     <Route path="/skipped" element={<SkippedPage />} />
     <Route path="/quality" element={<QualityPage />} />
-    <Route path="/deps" element={<DepsPage />} />
   </Route>
 );

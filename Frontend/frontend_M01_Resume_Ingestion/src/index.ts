@@ -20,7 +20,7 @@
  * rendered rather than a second opinion computed in the browser.
  */
 
-export { m01Routes } from "./routes";
+export { M01_HOME, m01Routes } from "./routes";
 export { M01_NAV } from "./nav";
 export type { NavItem } from "./nav";
 export { AppShell } from "./ui/AppShell";

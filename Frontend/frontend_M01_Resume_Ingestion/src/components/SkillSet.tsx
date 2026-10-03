@@ -58,24 +58,23 @@ const MAPPING_COPY: Record<
   { label: string; tone: "confirmed" | "reported" | "neutral"; hint: string }
 > = {
   m04: {
-    label: "ontology",
+    label: "on your skill graph",
     tone: "confirmed",
-    hint: "The skill graph resolved this label to a concept. Anything downstream can test it.",
+    hint: "Matched to a topic on your skill graph, so interviews can ask about it.",
   },
   offline_fallback: {
     label: "guessed offline",
     tone: "reported",
     hint:
-      "The skill graph was unreachable, so this id comes from a five-entry table in M01. " +
-      "It has not been confirmed to exist in the ontology.",
+      "The skill graph was unreachable, so this was matched from a short offline list. " +
+      "It hasn't been checked against the full list of topics yet.",
   },
   unmapped: {
     label: "no concept yet",
     tone: "neutral",
     hint:
-      "It is on your resume and the ontology has no concept for it, so nothing can build a " +
-      "question from it yet. It is kept rather than dropped — a skill we cannot test is still " +
-      "a skill you claimed.",
+      "It's on your resume but there's no topic for it yet, so interviews can't ask about it. " +
+      "It's kept, not dropped — a skill we can't test is still a skill you listed.",
   },
 };
 
@@ -112,11 +111,11 @@ const CONTEXT_RANK: SkillContext[] = [
 
 export function ScanSourceNote({ scannedAgainst }: { scannedAgainst: ScannedAgainst }) {
   if (scannedAgainst === "m04") {
-    return <p className="text-xs text-ink-soft">Scanned against the full concept ontology.</p>;
+    return <p className="text-xs text-ink-soft">Checked against every topic on the skill graph.</p>;
   }
   return (
     <p className="text-xs text-ink-soft">
-      Scanned against M01&rsquo;s five-concept offline lexicon, because the skill graph was
+      Checked against a short offline list of five topics, because the skill graph was
       unreachable.{" "}
       <strong className="font-medium text-ink">
         Skills outside those five were not looked for at all

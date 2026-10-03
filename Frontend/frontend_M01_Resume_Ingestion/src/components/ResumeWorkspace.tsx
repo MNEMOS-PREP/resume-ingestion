@@ -234,12 +234,23 @@ export function ResumeWorkspace({
               Paste the posting and we will check the eligibility bar, what your
               resume evidences, and how a mock for it should spend its time.
             </p>
-            <Link
-              to={`/resumes/${resume.id}/target`}
-              className="shrink-0 text-sm font-medium text-brand hover:text-brand-hover"
-            >
-              Check against a job &rarr;
-            </Link>
+            <span className="flex shrink-0 flex-wrap items-center gap-4">
+              <Link
+                to={`/resumes/${resume.id}/target`}
+                className="text-sm font-medium text-brand hover:text-brand-hover"
+              >
+                Check against a job &rarr;
+              </Link>
+              {/* 2026-10-04: the other way out. M06 plans a segment on the
+                  lines here that are hardest to defend, so the interview is
+                  the practice this screen is diagnosing. */}
+              <Link
+                to="/mock"
+                className="text-sm font-medium text-brand hover:text-brand-hover"
+              >
+                Practise defending it &rarr;
+              </Link>
+            </span>
           </div>
 
           {/* The same movement `j` and `k` do, for the people who will never

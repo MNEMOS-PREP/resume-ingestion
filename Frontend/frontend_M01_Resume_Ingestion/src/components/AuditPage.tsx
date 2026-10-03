@@ -64,7 +64,7 @@ export function AuditPage() {
       <Empty title="No such resume">
         The id in the URL does not match a stored resume.
         <div className="mt-3">
-          <Link to="/" className="text-sm font-medium text-brand hover:text-brand-hover">
+          <Link to="/resume" className="text-sm font-medium text-brand hover:text-brand-hover">
             Start again &rarr;
           </Link>
         </div>
