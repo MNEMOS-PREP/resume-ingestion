@@ -133,6 +133,7 @@ export function ResumeDropzone({
             ref={input}
             type="file"
             className="sr-only"
+            aria-label="Choose your resume file"
             accept={uploadable.join(",")}
             onChange={(event) => choose(event.target.files)}
           />
