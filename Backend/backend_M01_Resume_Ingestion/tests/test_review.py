@@ -284,3 +284,89 @@ def test_a_stranger_cannot_read_someone_elses_review(as_student, m04_up):
     assert as_student(owner).get(f"/v1/resumes/{resume_id}/review").status_code == 200
     stranger = as_student(str(uuid.uuid4())).get(f"/v1/resumes/{resume_id}/review")
     assert stranger.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+#  Found on a real resume (2026-10-04)
+# ---------------------------------------------------------------------------
+
+
+_PROJECTS = str(uuid.uuid4())
+
+
+def _work_claim(text, claim_type="built", **extra):
+    return {
+        "id": str(uuid.uuid4()),
+        "resume_id": str(uuid.uuid4()),
+        "section_id": _PROJECTS,
+        "span": {"artifact_id": str(uuid.uuid4()), "start": 0, "end": 1, "text": "x"},
+        "text": text,
+        "claim_type": claim_type,
+        "quantifiers": [],
+        "specificity": 0.6,
+        "verifiability": 0.3,
+        "ownership_clarity": 0.7,
+        "recency": 1.0,
+        "risk_score": 0.5,
+        "risk_band": "vague",
+        "prominence": 0.5,
+        **extra,
+    }
+
+
+def _review_of(claims, mentions=()):
+    return build_review(
+        resume_id="r",
+        filename=None,
+        text="",
+        sections=[{"id": _PROJECTS, "kind": "projects"}],
+        claims=list(claims),
+        red_flags=[],
+        skill_mentions=list(mentions),
+        has_original=False,
+        contact={"email": True, "phone": True},
+    )
+
+
+def test_a_count_is_a_number():
+    """'4 core endpoints' has a number; only a line with no digit at all is told it has none."""
+    review = _review_of(
+        [
+            _work_claim(
+                "Constructed a FastAPI backend with 4 core endpoints and a React interface."
+            ),
+            _work_claim("Built a recommendation engine for the library."),
+        ]
+    )
+    numbers = next(c for c in review.checks if c.id == "numbers")
+    assert [i.original for i in numbers.issues] == [
+        "Built a recommendation engine for the library."
+    ]
+
+
+def test_an_achievement_is_asked_for_evidence_not_a_before_and_after():
+    review = _review_of([_work_claim("Secured IP protection on the architecture.", "achieved")])
+    issue = next(c for c in review.checks if c.id == "numbers").issues[0]
+    assert "application number" in issue.suggestion
+    assert "from 420 ms" not in issue.suggestion
+
+
+def test_a_long_risky_line_gets_one_blank_not_three():
+    long_line = " ".join(["word"] * 40) + "."
+    review = _review_of(
+        [_work_claim(long_line, risk_band="risky", verifiability=0.1, specificity=0.2)]
+    )
+    issue = next(c for c in review.checks if c.id == "risky").issues[0]
+    assert issue.blanks == 1
+
+
+def test_a_skill_named_in_a_project_line_is_used_and_labels_are_not_names():
+    mentions = [
+        {"surface": "Programming: Python", "context": "skills_list"},
+        {"surface": "C", "context": "skills_list"},
+        {"surface": "Kubernetes", "context": "skills_list"},
+    ]
+    review = _review_of([_work_claim("Trained a CNN in Python on 2,000 retinal images.")], mentions)
+    issue = next(c for c in review.checks if c.id == "skills_used").issues[0]
+    # Python is named in the line; "C" is not, and "CNN" must not count for it.
+    assert issue.original == "C, Kubernetes"

@@ -63,6 +63,7 @@ LONG_BULLET_WORDS = 35
 #: Under this many it cannot say what was done and what came of it.
 SHORT_BULLET_WORDS = 5
 
+_DIGIT = re.compile(r"\d")
 _TEAM_WORDS = re.compile(r"\b(?:we|our|us|the team)\b", re.IGNORECASE)
 _LEADING_I = re.compile(r"^\s*I\s+(?=\w)")
 
@@ -201,9 +202,20 @@ def with_strong_opener(text: str) -> str | None:
     return f"[What you did — e.g. Built, Led, Cut] {rest}".rstrip()
 
 
-def with_result_blank(text: str) -> str:
+#: An achievement (a patent, a paper, a rank) is checked by its evidence, not by a
+#: before-and-after: "from 420 ms to 95 ms" means nothing appended to "patent filed".
+EVIDENCE_BLANK = "[the evidence — application number, rank, or where it's published]"
+
+#: Past this many words a line has no room for three blanks; it gets the one
+#: that matters most (the result) and the length check says the rest.
+_ROOM_FOR_BLANKS = 28
+
+
+def with_result_blank(text: str, claim_type: str | None = None) -> str:
     """The student's own sentence, with a place for the number it is missing."""
     base = text.rstrip().rstrip(".")
+    if claim_type == "achieved":
+        return f"{base} — {EVIDENCE_BLANK}."
     return f"{base}, [the result, with a number — e.g. from 420 ms to 95 ms, or 2,000 users]."
 
 
@@ -215,18 +227,31 @@ def with_missing_slots(claim: dict[str, Any]) -> str:
     [what exactly] for the thing you built" about a line that named its stack
     — so the review keeps the sentence and asks only for what is missing.
     """
+    if claim.get("claim_type") == "achieved":
+        return with_result_blank(claim["text"], "achieved")
     slots = {s.slot: s.present for s in suggest(ResumeClaim.model_validate(claim)).slots}
     text = claim["text"]
     if not slots.get("action", True):
         text = with_strong_opener(text) or text
     base = text.rstrip().rstrip(".")
-    if not slots.get("task", True):
+    roomy = len(base.split()) <= _ROOM_FOR_BLANKS
+    if roomy and not slots.get("task", True):
         base += " — [why: the problem it solved]"
     if not slots.get("result", True):
         base += ", [what measurably changed — with a number]"
-    if not slots.get("situation", True):
+    if roomy and not slots.get("situation", True):
         base += " across [the scale — data size, users, or team]"
     return base + "."
+
+
+def skill_name(surface: str) -> str:
+    """'Programming: Python' → 'Python'. A list's category label is not the skill."""
+    return surface.rsplit(":", 1)[-1].strip()
+
+
+def named_in(name: str, text: str) -> bool:
+    """Whether `name` appears in `text` as a word — 'C' must not match 'CNN'."""
+    return re.search(rf"(?<![\w+#.]){re.escape(name)}(?![\w+#])", text, re.IGNORECASE) is not None
 
 
 def blanks_in(text: str | None) -> int:
@@ -241,7 +266,7 @@ def blanks_in(text: str | None) -> int:
 def _risky_reason(claim: dict[str, Any]) -> str:
     parts = {
         "specificity": "it doesn't say exactly what you built or how",
-        "verifiability": "nothing in it can be checked — no number, name or result",
+        "verifiability": "nothing in it is measured, so a panel can't check that it worked",
         "ownership_clarity": "it doesn't say which part was yours",
     }
     weakest = min(parts, key=lambda key: claim.get(key, 1.0))
@@ -380,10 +405,12 @@ def build_review(
                 "There is no number in it, so there is nothing to show it worked. A result "
                 "with a number is what a panel remembers — and the first thing they test."
             ),
-            suggestion=with_result_blank(claim["text"]),
+            suggestion=with_result_blank(claim["text"], claim.get("claim_type")),
         )
         for claim in work
-        if not claim.get("quantifiers")
+        # A count ("4 endpoints", "23 agent nodes") is a number; the line is
+        # flagged only when it has none at all, which is what the card says.
+        if not _DIGIT.search(claim["text"])
     ]
     checks.append(
         ReviewCheck(
@@ -507,14 +534,22 @@ def build_review(
     )
 
     # ── complete ────────────────────────────────────────────────────────────
+    # A skill is "used" when any experience or project line NAMES it. The
+    # mention extractor only recognises some names in prose, so trusting its
+    # contexts alone called Python unused on a resume full of Django and
+    # FastAPI work. The label a list puts in front ("Programming: Python") is
+    # not part of the name.
+    work_text = " ".join(c["text"] for c in work)
     by_skill: dict[str, list[dict[str, Any]]] = {}
     for mention in skill_mentions:
-        key = mention.get("concept_id") or str(mention.get("surface", "")).casefold()
-        by_skill.setdefault(key, []).append(mention)
+        name = skill_name(str(mention.get("surface", "")))
+        if name:
+            by_skill.setdefault(name.casefold(), []).append({**mention, "surface": name})
     unused = [
         mentions[0]
         for mentions in by_skill.values()
         if all(m.get("context") == "skills_list" for m in mentions)
+        and not named_in(mentions[0]["surface"], work_text)
     ]
     # One card, not one per skill: a long skills list produced twenty cards that
     # buried every other finding, and the fix is one decision — work the ones
