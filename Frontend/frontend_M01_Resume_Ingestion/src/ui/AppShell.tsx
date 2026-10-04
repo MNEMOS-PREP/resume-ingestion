@@ -64,7 +64,7 @@ const NAV = [
  * screens and keep the reading column. Only the Claim Map itself is a
  * workspace.
  */
-const WORKSPACE_ROUTE = /^\/resumes\/[^/]+\/?$/;
+const WORKSPACE_ROUTE = /^\/resumes\/[^/]+(\/review)?\/?$/;
 
 function ThemeToggle() {
   const [theme, setTheme] = useState<"light" | "dark">(

@@ -630,3 +630,57 @@ export interface ResumePageInfo {
   width: number;
   height: number;
 }
+
+/* ------------------------------------------------------------------ */
+/*  The review (2026-10-04, `review.py`)                              */
+/* ------------------------------------------------------------------ */
+
+export type ReviewGroup = "defend" | "impact" | "clarity" | "complete";
+
+/** One line (or one gap) that fails one check. */
+export interface ReviewIssue {
+  /** Stable across reloads, so an ignored issue stays ignored. */
+  id: string;
+  check: string;
+  claim_id: string | null;
+  section: SectionKind | null;
+  original: string;
+  /** Why it matters, quoting the student's words. */
+  problem: string;
+  /** The line as it could read: words removed, or [blanks] only the student can fill. */
+  suggestion: string | null;
+  blanks: number;
+  /** For a red flag: what to say if a panel asks. */
+  answer: string | null;
+  spans: SourceSpan[];
+}
+
+export interface ReviewCheck {
+  id: string;
+  title: string;
+  group: ReviewGroup;
+  looks_for: string;
+  passed: boolean;
+  looked_at: number;
+  issues: ReviewIssue[];
+}
+
+export interface DocumentSegment {
+  text: string;
+  claim_id: string | null;
+  edited: boolean;
+}
+
+/** `GET /v1/resumes/{id}/review` — counts, never a total (§15 decision 1). */
+export interface ResumeReview {
+  resume_id: string;
+  filename: string | null;
+  has_original: boolean;
+  checks: ReviewCheck[];
+  passed: number;
+  total: number;
+  open_issues: number;
+  bands: Record<"strong" | "vague" | "risky", number>;
+  edited: number;
+  document: DocumentSegment[];
+}

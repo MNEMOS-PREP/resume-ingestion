@@ -42,6 +42,7 @@ import { ClaimList } from "./ClaimMap";
 import { ClaimRail } from "./ClaimRail";
 import type { Filter, GroupBy } from "./ClaimRail";
 import { RedFlagPanel } from "./RedFlagBanner";
+import { ResumeTabs } from "./ResumeTabs";
 import { SECTION_LABEL, SECTION_STAKE } from "./sections";
 import { ScanSourceNote, SkillPanel } from "./SkillSet";
 import { PageRedactionNote, PdfHighlightViewer } from "./PdfHighlightViewer";
@@ -212,7 +213,8 @@ export function ResumeWorkspace({
 
       {/* ── the claims ───────────────────────────────────────────────────── */}
       <div className="min-w-0 flex-1 overflow-y-auto px-5 py-6 md:px-8">
-        <header className="mb-6">
+        <ResumeTabs resumeId={resume.id} active="ask" />
+        <header className="mt-6 mb-6">
           <h2 className="text-title font-semibold text-ink">
             Your resume, as an interviewer sees it
           </h2>

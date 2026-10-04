@@ -34,7 +34,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { usePages, pageImageUrl } from "../api";
+import { usePageImage, usePages } from "../api";
 import { Panel, SkeletonRows } from "../ui/primitives";
 import type { SourceSpan } from "../types";
 
@@ -42,9 +42,13 @@ export function PdfHighlightViewer({
   resumeId,
   spans,
   fallback,
+  autoScroll = true,
 }: {
   resumeId: string;
   spans: SourceSpan[];
+  /** Scroll the highlighted page into view. Off where it would move the
+   *  whole window rather than this viewer (a phone, in the review). */
+  autoScroll?: boolean;
   /** Shown when there is no page — a pasted resume, or a deleted file. */
   fallback: React.ReactNode;
 }) {
@@ -74,7 +78,7 @@ export function PdfHighlightViewer({
           page={page.page}
           widthPoints={page.width}
           spans={spans.filter((span) => span.page === page.page && span.bbox)}
-          scrollTo={page.page === target && spans.length > 0}
+          scrollTo={autoScroll && page.page === target && spans.length > 0}
         />
       ))}
     </div>
@@ -94,6 +98,7 @@ function PageImage({
   spans: SourceSpan[];
   scrollTo: boolean;
 }) {
+  const src = usePageImage(resumeId, page);
   const image = useRef<HTMLImageElement>(null);
   const frame = useRef<HTMLDivElement>(null);
   // Points -> rendered pixels. Measured rather than assumed: the server picks
@@ -111,7 +116,7 @@ function PageImage({
     observer.observe(image.current);
     return () => observer.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [widthPoints]);
+  }, [widthPoints, src.data]);
 
   const key = spans.map((s) => `${s.start}-${s.end}`).join(",");
   useEffect(() => {
@@ -123,13 +128,21 @@ function PageImage({
 
   return (
     <div ref={frame} className="relative mb-4 last:mb-0">
-      <img
-        ref={image}
-        src={pageImageUrl(resumeId, page)}
-        alt={`Page ${page} of your resume`}
-        onLoad={measure}
-        className="w-full rounded-panel border border-line"
-      />
+      {src.isError ? (
+        <p className="rounded-panel border border-line px-3 py-6 text-center text-sm text-ink-soft">
+          {(src.error as Error).message}
+        </p>
+      ) : !src.data ? (
+        <div className="aspect-[1/1.414] w-full animate-pulse rounded-panel border border-line bg-surface-sunken" />
+      ) : (
+        <img
+          ref={image}
+          src={src.data}
+          alt={`Page ${page} of your resume`}
+          onLoad={measure}
+          className="w-full rounded-panel border border-line"
+        />
+      )}
 
       {scale > 0 &&
         spans.map((span) => {

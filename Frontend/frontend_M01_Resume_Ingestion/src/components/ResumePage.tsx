@@ -29,7 +29,7 @@
  */
 
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { useResume } from "../api";
 import { ConfirmationEditor } from "./ConfirmationEditor";
@@ -41,6 +41,7 @@ export function ResumePage() {
   const { resumeId } = useParams<{ resumeId: string }>();
   const resume = useResume(resumeId);
   const [reviewing, setReviewing] = useState(false);
+  const navigate = useNavigate();
 
   if (resume.isLoading) {
     return (
@@ -86,7 +87,15 @@ export function ResumePage() {
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-3xl px-5 py-8 md:px-8 md:py-10">
-            <ConfirmationEditor resume={data} onConfirmed={() => setReviewing(false)} />
+            {/* Confirmed, the next thing a student wants is what to fix:
+                Review & fix, rather than the Claim Map (2026-10-04). */}
+            <ConfirmationEditor
+              resume={data}
+              onConfirmed={() => {
+                setReviewing(false);
+                navigate(`/resumes/${data.id}/review`);
+              }}
+            />
           </div>
         </div>
 

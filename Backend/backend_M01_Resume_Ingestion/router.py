@@ -99,6 +99,7 @@ from .entities import extract_entities
 from .events import ResumeEvent, emit
 from .extract import drop_redundant, extract_surface_forms, scan_prose
 from .retention import Disclosure, ShareGrant
+from .review import ResumeReview, build_review
 from .revisions import ALLOWED as ALLOWED_CORRECTIONS
 from .revisions import apply_correction, diff_claims
 from .rewrite import RewriteSuggestion, suggest_grounded
@@ -862,6 +863,33 @@ def list_red_flags(resume_id: uuid.UUID, session: Session = Depends(get_db)):
             for severity in ("serious", "notable", "info")
         },
     }
+
+
+@router.get("/resumes/{resume_id}/review", response_model=ResumeReview)
+def review_resume(resume_id: uuid.UUID, session: Session = Depends(get_db)) -> ResumeReview:
+    """The review: every check, each line that fails one, and the document as
+    edited so far (2026-10-04, `review.py`).
+
+    Counts, never a total — §15 decision 1. Contact details are checked for
+    PRESENCE only: the encrypted lists are counted, never decrypted, so this
+    route releases nothing the contact route guards.
+    """
+    resume = _require(session, resume_id)
+    contact = session.get(ResumeContact, resume_id)
+    return build_review(
+        resume_id=str(resume.id),
+        filename=resume.filename,
+        text=resume.redacted_text,
+        sections=resume.sections,
+        claims=resume.claims,
+        red_flags=resume.red_flags,
+        skill_mentions=resume.skill_mentions,
+        has_original=bool(resume.source_sha256) and resume.mime == "application/pdf",
+        contact={
+            "email": bool(contact and contact.emails),
+            "phone": bool(contact and contact.phones),
+        },
+    )
 
 
 @router.get("/resumes/{resume_id}/skills")

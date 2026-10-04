@@ -42,6 +42,7 @@ export { DateEditor } from "./components/DateEditor";
 // second index route. Standalone still routes to them through m01Routes.
 export { IngestPage, SkippedPage } from "./components/IngestPage";
 export { ResumePage } from "./components/ResumePage";
+export { ReviewPage } from "./components/ReviewPage";
 export { DiffPage } from "./components/DiffPage";
 export { AuditPage } from "./components/AuditPage";
 export { PrivacyPage } from "./components/PrivacyPage";

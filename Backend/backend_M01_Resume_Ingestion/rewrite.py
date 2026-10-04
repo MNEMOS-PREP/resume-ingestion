@@ -76,6 +76,12 @@ _FILLER = re.compile(
 )
 
 
+#: Public names for the two patterns the resume review (`review.py`) reuses, so
+#: "weak opener" and "filler" mean the same words on every screen.
+WEAK_OPENER = _WEAK_VERB
+FILLER = _FILLER
+
+
 class RewriteSlot(BaseModel):
     """One thing a defensible bullet needs, and whether this one has it."""
 

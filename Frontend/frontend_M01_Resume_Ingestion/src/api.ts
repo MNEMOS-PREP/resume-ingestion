@@ -52,6 +52,7 @@ import type {
   ResumeEventRow,
   ResumeIngestIn,
   ResumePageInfo,
+  ResumeReview,
   RevokeResult,
   RewriteSuggestion,
   ShareGrant,
@@ -169,6 +170,7 @@ export const m01Keys = {
   corrections: (id: string) => ["m01", "corrections", id] as const,
   events: (id: string) => ["m01", "events", id] as const,
   pages: (id: string) => ["m01", "pages", id] as const,
+  review: (id: string) => ["m01", "review", id] as const,
   disclosure: (id: string, viewer: string) => ["m01", "disclosure", id, viewer] as const,
 };
 
@@ -178,6 +180,8 @@ function invalidateResume(qc: ReturnType<typeof useQueryClient>, resume: Resume)
   qc.invalidateQueries({ queryKey: ["m01", "claims", resume.id] });
   qc.invalidateQueries({ queryKey: m01Keys.redFlags(resume.id) });
   qc.invalidateQueries({ queryKey: m01Keys.skills(resume.id) });
+  // The review is computed from the claims, so an edit re-checks it.
+  qc.invalidateQueries({ queryKey: m01Keys.review(resume.id) });
   qc.invalidateQueries({ queryKey: m01Keys.byCandidate(resume.candidate_id) });
   // Every write above goes through the correction log and emits an event, so
   // the two audit views are stale the moment any of them lands. They were left
@@ -318,6 +322,18 @@ export function useRedFlags(resumeId: string | undefined) {
     queryKey: m01Keys.redFlags(resumeId ?? ""),
     enabled: Boolean(resumeId),
     queryFn: () => api.get<RedFlagListing>(`/v1/resumes/${resumeId}/red-flags`),
+  });
+}
+
+/**
+ * The review (2026-10-04): every check, each line that fails one, and the
+ * document as edited so far. Counts, never a total — §15 decision 1.
+ */
+export function useReview(resumeId: string | undefined) {
+  return useQuery({
+    queryKey: m01Keys.review(resumeId ?? ""),
+    enabled: Boolean(resumeId),
+    queryFn: () => api.get<ResumeReview>(`/v1/resumes/${resumeId}/review`),
   });
 }
 
@@ -638,17 +654,33 @@ export function usePages(resumeId: string | undefined) {
   });
 }
 
-/**
- * The URL of one rendered page.
- *
- * A plain `img src` rather than a hook: the browser's own image cache is
- * better at this than react-query is, and the contact block is already painted
- * out server-side, so there is nothing here that needs the fetch wrapper.
- *
- * That does mean it carries no identity header — which is why the backend also
- * keys this route by resume id and refuses at the router. An image URL that
- * leaked would be a leak of a page whose contact block was already removed.
- */
+/** The URL of one rendered page. */
 export function pageImageUrl(resumeId: string, page: number): string {
   return `${BASE}/v1/resumes/${resumeId}/pages/${page}`;
+}
+
+/**
+ * One rendered page, fetched WITH the session's identity, as a local blob URL.
+ *
+ * This was a plain `img src`, on the reasoning that the contact block is
+ * already painted out. But an `<img>` cannot send headers, and the router
+ * refuses anyone who does not say who they are — so every page came back 403
+ * and the viewer showed a broken image. Nobody saw it because the uploads
+ * before the original was kept had no page to draw (2026-10-04).
+ *
+ * The URL is never revoked: the query cache hands the same one to every
+ * remount, and a revoked URL would break the next one. A page is a few
+ * hundred kilobytes and lives as long as the tab.
+ */
+export function usePageImage(resumeId: string, page: number) {
+  return useQuery({
+    queryKey: [...m01Keys.pages(resumeId), "image", page],
+    staleTime: Infinity,
+    retry: false,
+    queryFn: async () => {
+      const response = await fetch(pageImageUrl(resumeId, page), { headers: identityHeaders() });
+      if (!response.ok) throw new Error(`Page ${page} could not be drawn (${response.status}).`);
+      return URL.createObjectURL(await response.blob());
+    },
+  });
 }
