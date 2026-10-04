@@ -42,6 +42,10 @@ import type {
   DisclosureReport,
   Health,
   IntakeErrorDetail,
+  Library,
+  LibraryItem,
+  LibraryItemIn,
+  LibraryItemPatch,
   ModuleStatus,
   ProgressEvent,
   QualityReport,
@@ -172,6 +176,7 @@ export const m01Keys = {
   pages: (id: string) => ["m01", "pages", id] as const,
   review: (id: string) => ["m01", "review", id] as const,
   disclosure: (id: string, viewer: string) => ["m01", "disclosure", id, viewer] as const,
+  library: (candidateId: string) => ["m01", "library", candidateId] as const,
 };
 
 /** Everything derived from one resume, invalidated together after a write. */
@@ -190,6 +195,8 @@ function invalidateResume(qc: ReturnType<typeof useQueryClient>, resume: Resume)
   qc.invalidateQueries({ queryKey: m01Keys.events(resume.id) });
   // AC-1.7's edit rate is computed from those corrections.
   qc.invalidateQueries({ queryKey: m01Keys.quality });
+  // An upload fills the library and an improved line rewords it there.
+  qc.invalidateQueries({ queryKey: m01Keys.library(resume.candidate_id) });
 }
 
 /* ------------------------------------------------------------------ */
@@ -526,11 +533,73 @@ export function useRewriteClaim(resumeId: string) {
   });
 }
 
+/**
+ * Remove a resume: the file, what was read from it, its review and questions.
+ * NOT what it held — its projects, skills, achievements and certifications stay
+ * in the library (`useLibrary`), which is the student's record of progress.
+ */
 export function useDeleteResume() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (resumeId: string) => api.del<void>(`/v1/resumes/${resumeId}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["m01"] }),
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/*  The library (2026-10-04)                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Everything the student has had on any resume, kept when a resume is deleted,
+ * and there to pick from when they edit a line or start a new resume.
+ */
+export function useLibrary(candidateId: string | undefined) {
+  return useQuery({
+    queryKey: m01Keys.library(candidateId ?? ""),
+    enabled: Boolean(candidateId),
+    queryFn: () => api.get<Library>(`/v1/resumes/candidate/${candidateId}/library`),
+  });
+}
+
+/** Something no resume says yet — last week's certificate. Adding what is
+ *  already there returns that item rather than a copy. */
+export function useAddLibraryItem(candidateId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: LibraryItemIn) =>
+      api.post<LibraryItem>(`/v1/resumes/candidate/${candidateId}/library`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: m01Keys.library(candidateId) }),
+  });
+}
+
+/** Reword, retitle, or move to another kind. Rewording into an item that is
+ *  already there merges the two. */
+export function useEditLibraryItem(candidateId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, ...body }: LibraryItemPatch & { itemId: string }) =>
+      patch<LibraryItem>(`/v1/resumes/candidate/${candidateId}/library/${itemId}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: m01Keys.library(candidateId) }),
+  });
+}
+
+/** It comes back only if a NEW upload contains it. */
+export function useDeleteLibraryItem(candidateId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (itemId: string) =>
+      api.del<void>(`/v1/resumes/candidate/${candidateId}/library/${itemId}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: m01Keys.library(candidateId) }),
+  });
+}
+
+/** The library's own erasure — deleting resumes deliberately leaves it alone. */
+export function useClearLibrary(candidateId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.del<void>(`/v1/resumes/candidate/${candidateId}/library`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: m01Keys.library(candidateId) }),
   });
 }
 

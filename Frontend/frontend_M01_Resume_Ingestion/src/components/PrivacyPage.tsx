@@ -30,16 +30,16 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
-  useDeleteResume,
   useDisclosure,
   useResume,
   useRevokeShare,
   useShareResume,
 } from "../api";
 import { ContactPanel } from "./ContactPanel";
+import { DeleteResumeDialog } from "./DeleteResumeDialog";
 import { useCandidateId } from "./candidate-hook";
 import { Btn, Empty, ErrorNote, Field, Panel, Pill, Rows, Section, SkeletonRows, TextField } from "../ui/primitives";
-import type { DisclosureLevel } from "../types";
+import type { DisclosureLevel, Resume } from "../types";
 
 const DISCLOSURE_COPY: Record<
   DisclosureLevel,
@@ -104,11 +104,7 @@ export function PrivacyPage() {
 
       <ShareControls resumeId={data.id} candidateId={candidateId} />
 
-      <DangerZone
-        resumeId={data.id}
-        filename={data.filename}
-        onDeleted={() => navigate("/resume", { replace: true })}
-      />
+      <DangerZone resume={data} onDeleted={() => navigate("/resume", { replace: true })} />
 
       <div className="flex flex-wrap gap-4 border-t border-line pt-5">
         <Link
@@ -301,59 +297,38 @@ function ShareControls({ resumeId, candidateId }: { resumeId: string; candidateI
  * — but "we deleted it except for the part we kept" is only acceptable if
  * nobody has to find that out afterwards.
  */
-function DangerZone({
-  resumeId,
-  filename,
-  onDeleted,
-}: {
-  resumeId: string;
-  filename: string | null;
-  onDeleted: () => void;
-}) {
-  const [armed, setArmed] = useState(false);
-  const remove = useDeleteResume();
+function DangerZone({ resume, onDeleted }: { resume: Resume; onDeleted: () => void }) {
+  const [asking, setAsking] = useState(false);
 
   return (
     <Section label="Deleting this resume">
       <Panel className="border-contested-line px-4 py-3.5">
         <p className="text-sm text-ink">
-          Deletes {filename ?? "this pasted text"}, its claims, the stored file and your contact
-          block. It cannot be undone and it takes effect immediately.
+          Deletes {resume.filename ?? "this pasted text"}, its claims, the stored file and your
+          contact block. It cannot be undone and it takes effect immediately.
         </p>
         <p className="mt-1.5 text-sm text-ink-soft">
-          Your correction log stays. It records that you disagreed with the parser and how, holds
-          none of your document, and is what tells us the parser is getting better rather than
-          worse. Nothing in it identifies the resume you just removed.
+          Two things stay. Your{" "}
+          <Link to="/resume/library" className="font-medium text-ink underline underline-offset-2">
+            library
+          </Link>{" "}
+          keeps the projects, skills, achievements and certifications it held — your record of
+          progress, which you can clear on its own. And your correction log: it records that you
+          disagreed with the parser and how, holds none of your document, and is what tells us the
+          parser is getting better rather than worse.
         </p>
 
-        {remove.isError && (
-          <div className="mt-2.5">
-            <ErrorNote>That did not delete. The resume is still stored.</ErrorNote>
-          </div>
-        )}
-
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {!armed ? (
-            <Btn type="button" variant="secondary" onClick={() => setArmed(true)}>
-              Delete this resume
-            </Btn>
-          ) : (
-            <>
-              <Btn
-                type="button"
-                variant="primary"
-                disabled={remove.isPending}
-                onClick={() => remove.mutate(resumeId, { onSuccess: onDeleted })}
-              >
-                {remove.isPending ? "Deleting…" : "Yes — delete it"}
-              </Btn>
-              <Btn type="button" variant="ghost" onClick={() => setArmed(false)}>
-                Keep it
-              </Btn>
-            </>
-          )}
+        <div className="mt-3">
+          <Btn type="button" variant="secondary" onClick={() => setAsking(true)}>
+            Delete this resume
+          </Btn>
         </div>
       </Panel>
+      <DeleteResumeDialog
+        resume={asking ? resume : null}
+        onClose={() => setAsking(false)}
+        onDeleted={onDeleted}
+      />
     </Section>
   );
 }

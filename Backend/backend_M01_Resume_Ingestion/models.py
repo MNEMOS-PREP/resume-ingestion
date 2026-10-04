@@ -256,3 +256,59 @@ class ResumeCorrection(SQLModel, table=True):
     new_value: str | None = None
 
     created_at: datetime = Field(default_factory=_utcnow)
+
+
+class LibraryItem(SQLModel, table=True):
+    """One thing a student has had on a resume, kept for them (2026-10-04).
+
+    A project bullet, a job line, an achievement, a certification, a degree or a
+    skill — collected from every resume they upload, de-duplicated, and kept
+    when a resume is deleted. Two uses, both asked for by name:
+
+    - **Progression.** Deleting a resume removes the document and its analysis.
+      It does not mean the projects in it never happened; the library is the
+      record of what the student has done across versions.
+    - **Speed.** Editing a line or starting a new resume, the student picks from
+      what they already wrote instead of retyping it.
+
+    Taken from the REDACTED text, so no contact detail is ever an item, and the
+    student can edit or remove any item — the right to erasure applies here on
+    its own terms, since deleting a resume deliberately leaves this alone.
+    """
+
+    __tablename__ = "m01_library_items"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    candidate_id: uuid.UUID = Field(index=True)
+    #: project · experience · achievement · certification · education · skill
+    kind: str = Field(index=True)
+    text: str
+    #: The line it sat under: a project's title, a job's role.
+    context: str = ""
+    #: Comparison key within (candidate, kind), so a re-upload is not a second copy.
+    key: str = Field(index=True)
+    #: Every resume it appeared in. Ids of deleted resumes stay: "it was on the
+    #: August version" is part of the history.
+    sources: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    #: Added or reworded by the student rather than read off an upload.
+    user_written: bool = False
+    first_seen: datetime = Field(default_factory=_utcnow)
+    #: When an upload last contained it. A student's edit does not move it, so
+    #: an item keeps its place in the list while they work on it.
+    last_seen: datetime = Field(default_factory=_utcnow)
+
+
+class LibrarySynced(SQLModel, table=True):
+    """A resume whose items are already in its student's library.
+
+    Each resume is read into the library exactly once — at upload, or the first
+    time the library is opened for a resume uploaded before it existed. So an
+    item the student removed stays removed until a NEW upload contains it: no
+    second reading of the same resume quietly brings it back.
+    """
+
+    __tablename__ = "m01_library_synced"
+
+    resume_id: uuid.UUID = Field(primary_key=True)
+    candidate_id: uuid.UUID = Field(index=True)
+    synced_at: datetime = Field(default_factory=_utcnow)

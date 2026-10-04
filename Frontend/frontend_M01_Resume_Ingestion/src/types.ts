@@ -684,3 +684,50 @@ export interface ResumeReview {
   edited: number;
   document: DocumentSegment[];
 }
+
+/* ------------------------------------------------------------------ */
+/*  The library (2026-10-04)                                          */
+/* ------------------------------------------------------------------ */
+
+/** In the order a resume reads. */
+export type LibraryKind =
+  | "experience"
+  | "project"
+  | "achievement"
+  | "certification"
+  | "education"
+  | "skill";
+
+/** One thing the student has had on a resume, kept when the resume is deleted. */
+export interface LibraryItem {
+  id: string;
+  kind: LibraryKind;
+  text: string;
+  /** The line it sat under — a project's title, a job's role. */
+  context: string;
+  /** Ids of every resume it was on, deleted ones included. */
+  sources: string[];
+  /** Added or reworded by the student rather than read off an upload. */
+  user_written: boolean;
+  first_seen: string;
+  last_seen: string;
+}
+
+/** `GET /v1/resumes/candidate/{id}/library` */
+export interface Library {
+  candidate_id: string;
+  kinds: LibraryKind[];
+  items: LibraryItem[];
+}
+
+export interface LibraryItemIn {
+  kind: LibraryKind;
+  text: string;
+  context?: string;
+}
+
+export interface LibraryItemPatch {
+  kind?: LibraryKind;
+  text?: string;
+  context?: string;
+}

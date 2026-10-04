@@ -23,15 +23,17 @@
  * through, so the check it fails re-runs and the card goes away if it passes.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { useEditClaim, useResume, useReview, useRewriteClaim } from "../api";
+import { DeleteResumeDialog } from "./DeleteResumeDialog";
 import { DrillPanel } from "./DrillPanel";
+import { LibraryPicker } from "./LibraryPicker";
 import { PdfHighlightViewer } from "./PdfHighlightViewer";
 import { ResumeTabs } from "./ResumeTabs";
 import { SECTION_LABEL } from "./sections";
 import { Btn, Empty, Panel, SkeletonRows } from "../ui/primitives";
-import type { DocumentSegment, ResumeReview, ReviewCheck, ReviewGroup, ReviewIssue } from "../types";
+import type { DocumentSegment, LibraryKind, ResumeReview, ReviewCheck, ReviewGroup, ReviewIssue } from "../types";
 
 /** A blank only the student can fill. Kept in step with `review.BLANK`. */
 const BLANK = /\[[^[\]]+\]/g;
@@ -41,6 +43,15 @@ const GROUP_LABEL: Record<ReviewGroup, string> = {
   impact: "Impact",
   clarity: "Clarity",
   complete: "Complete",
+};
+
+/** A line's section, as the library kind to offer first when replacing it. */
+const SECTION_KIND: Record<string, LibraryKind> = {
+  experience: "experience",
+  projects: "project",
+  achievements: "achievement",
+  publications: "achievement",
+  certifications: "certification",
 };
 
 /** Checks whose suggestion the model can restructure (never add to). */
@@ -117,6 +128,7 @@ function FixDiff({ original, suggestion }: { original: string; suggestion: strin
 
 function IssueCard({
   resumeId,
+  candidateId,
   issue,
   position,
   of,
@@ -127,6 +139,8 @@ function IssueCard({
   onIgnore,
 }: {
   resumeId: string;
+  /** Whose library the editor can pick from. */
+  candidateId: string | undefined;
   issue: ReviewIssue;
   position: number;
   of: number;
@@ -142,6 +156,7 @@ function IssueCard({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [drill, setDrill] = useState(false);
+  const [picking, setPicking] = useState(false);
   const box = useRef<HTMLTextAreaElement>(null);
   const card = useRef<HTMLElement>(null);
 
@@ -178,7 +193,12 @@ function IssueCard({
       if (!issue.claim_id) return;
       edit.mutate(
         { claimId: issue.claim_id, field: "text", value: text.trim() },
-        { onSuccess: () => setEditing(false) },
+        {
+          onSuccess: () => {
+            setEditing(false);
+            setPicking(false);
+          },
+        },
       );
     },
     [edit, issue.claim_id],
@@ -282,6 +302,28 @@ function IssueCard({
                 ? `Fill ${draftBlanks === 1 ? "the blank" : `all ${draftBlanks} blanks`} with your own facts — a line with one isn't saved.`
                 : "Only what you can explain out loud. Ctrl + Enter saves."}
             </p>
+            {candidateId &&
+              (picking ? (
+                <LibraryPicker
+                  candidateId={candidateId}
+                  prefer={issue.section ? SECTION_KIND[issue.section] : undefined}
+                  exclude={issue.original}
+                  onPick={(text) => {
+                    setDraft(text);
+                    setPicking(false);
+                    box.current?.focus();
+                  }}
+                  onClose={() => setPicking(false)}
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setPicking(true)}
+                  className="mt-2 text-xs font-medium text-brand hover:underline"
+                >
+                  Pick from your library
+                </button>
+              ))}
           </div>
         )}
 
@@ -306,7 +348,13 @@ function IssueCard({
             >
               {edit.isPending ? "Saving…" : "Save line"}
             </Btn>
-            <Btn variant="ghost" onClick={() => setEditing(false)}>
+            <Btn
+              variant="ghost"
+              onClick={() => {
+                setEditing(false);
+                setPicking(false);
+              }}
+            >
               Cancel
             </Btn>
           </>
@@ -351,12 +399,14 @@ function Rail({
   ignored,
   selected,
   onSelect,
+  onRemove,
 }: {
   resumeId: string;
   review: ResumeReview;
   ignored: Set<string>;
   selected: string;
   onSelect: (check: string) => void;
+  onRemove: () => void;
 }) {
   const open = (check: ReviewCheck) => check.issues.filter((i) => !ignored.has(i.id)).length;
   const toFix = review.checks.filter((c) => open(c) > 0);
@@ -458,6 +508,20 @@ function Rail({
             <Link to="/mock" className="block rounded-lg px-2.5 py-2 text-ink-soft hover:bg-surface-sunken hover:text-ink">
               Practise an interview on it
             </Link>
+          </li>
+          <li>
+            <Link to="/resume/library" className="block rounded-lg px-2.5 py-2 text-ink-soft hover:bg-surface-sunken hover:text-ink">
+              Your library
+            </Link>
+          </li>
+          <li>
+            <button
+              type="button"
+              onClick={onRemove}
+              className="block w-full rounded-lg px-2.5 py-2 text-left text-ink-soft hover:bg-surface-sunken hover:text-contested"
+            >
+              Remove this resume
+            </button>
           </li>
         </ul>
       </div>
@@ -602,6 +666,8 @@ export function ReviewPage() {
   const [focusId, setFocusId] = useState<string | null>(null);
   const [showIgnored, setShowIgnored] = useState(false);
   const [byKeyboard, setByKeyboard] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const navigate = useNavigate();
 
   const data = review.data;
   // The first check with something to fix, in the order a panel hits them.
@@ -661,10 +727,17 @@ export function ReviewPage() {
       <div className="lg:col-span-3">
         <ResumeTabs resumeId={resumeId} active="review" />
       </div>
-      <Rail resumeId={resumeId} review={data} ignored={ignored} selected={selectedId} onSelect={(id) => {
-        setChosen(id);
-        setFocusId(null);
-      }} />
+      <Rail
+        resumeId={resumeId}
+        review={data}
+        ignored={ignored}
+        selected={selectedId}
+        onSelect={(id) => {
+          setChosen(id);
+          setFocusId(null);
+        }}
+        onRemove={() => setRemoving(true)}
+      />
 
       <main className="min-w-0">
         <header>
@@ -709,6 +782,7 @@ export function ReviewPage() {
                   <IssueCard
                     key={issue.id}
                     resumeId={resumeId}
+                    candidateId={resume.data?.candidate_id}
                     issue={issue}
                     position={index + 1}
                     of={visible.length}
@@ -738,9 +812,29 @@ export function ReviewPage() {
             </p>
           </section>
         )}
+
+        {/* The rail's tools are desktop-only; on a phone they follow the cards. */}
+        <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 border-t border-line pt-4 text-sm lg:hidden">
+          <Link to="/resume/library" className="font-medium text-ink-soft hover:text-ink">
+            Your library
+          </Link>
+          <button
+            type="button"
+            onClick={() => setRemoving(true)}
+            className="font-medium text-ink-soft hover:text-contested"
+          >
+            Remove this resume
+          </button>
+        </div>
       </main>
 
       <DocumentPane review={data} focus={focus} />
+
+      <DeleteResumeDialog
+        resume={removing ? (resume.data ?? null) : null}
+        onClose={() => setRemoving(false)}
+        onDeleted={() => navigate("/resume", { replace: true })}
+      />
     </div>
   );
 }

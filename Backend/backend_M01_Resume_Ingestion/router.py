@@ -45,7 +45,7 @@ from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from ai_core.concepts import normalise_alias
 from ai_core.dependencies import DependencyRegistry, DependencyStatus
@@ -63,13 +63,14 @@ from fastapi import (
     status,
 )
 from fastapi.responses import Response, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from backend_M01_Resume_Ingestion import (
     config,
     crypto,
     documents,
+    library,
     llm,
     normalise,
     objectstore,
@@ -79,6 +80,8 @@ from backend_M01_Resume_Ingestion import (
 from backend_M01_Resume_Ingestion import probes as probe_gen
 from backend_M01_Resume_Ingestion import skills as skills_mod
 from backend_M01_Resume_Ingestion.models import (
+    LibraryItem,
+    LibrarySynced,
     Resume,
     ResumeContact,
     ResumeCorrection,
@@ -345,6 +348,34 @@ def _ingest(
         .where(Resume.content_sha256 == digest)
     ).first()
     if existing is not None:
+        # A row read before the FILE was kept (FR-1.2 landed later) has no
+        # original, so it can never show its page. The same document arriving
+        # again IS that original: attach it rather than discard it, so that
+        # re-uploading is how such a student gets the page view back. Only for
+        # the same kind of file — a DOCX with the same text is not the PDF.
+        if source and not existing.source_sha256 and existing.mime == document.mime:
+            suffix = "pdf" if document.mime == "application/pdf" else "docx"
+            existing.source_sha256, existing.source_uri = store_source(
+                source, suffix=suffix, candidate_id=str(candidate_id)
+            )
+            session.add(existing)
+        # Uploading a version again is choosing it: it becomes the current
+        # resume, as any upload does (EC-1.9). Reusing the row without that
+        # left the student's newer resume current — and once two rows were
+        # active at the same time, which every "the student's resume" reader
+        # then answered differently.
+        if not existing.is_active and existing.parse_status != "failed":
+            for previous in session.exec(
+                select(Resume).where(Resume.candidate_id == candidate_id).where(Resume.is_active)
+            ).all():
+                previous.is_active = False
+                session.add(previous)
+            existing.is_active = True
+            session.add(existing)
+        # A row from before the library existed is read into it the first
+        # time its document arrives again. Once only: `sync` is a no-op after.
+        if existing.parse_status == "ready":
+            library.sync(session, existing)
         emit(
             session,
             "reused",
@@ -662,6 +693,12 @@ def _ingest(
         stored=1,
         duration_ms=resume.parse_ms,
     )
+
+    # Its items into the student's library — kept when this resume is deleted,
+    # and there to pick from for the next one. Only a parse we trust: one that
+    # `needs_review` is read when the student confirms it.
+    if resume.parse_status == "ready":
+        library.sync(session, resume)
 
     session.commit()
     session.refresh(resume)
@@ -1092,6 +1129,7 @@ def _apply(
     # re-scores only that claim"). `user_edited` stays true either way.
     if target == "claim" and field == "text":
         _rescore(resume, target_id)
+        library.reword(session, resume, old_value or "", value or "")
 
     session.add(resume)
     session.add(
@@ -1298,6 +1336,8 @@ def confirm_resume(resume_id: uuid.UUID, session: Session = Depends(get_db)):
         if resume.parse_status in {"ready", "needs_review"}:
             resume.parse_status = "ready"
         session.add(resume)
+        if resume.parse_status == "ready":
+            library.sync(session, resume)
         corrections = session.exec(
             select(ResumeCorrection).where(ResumeCorrection.resume_id == resume_id)
         ).all()
@@ -1687,11 +1727,29 @@ def delete_resume(resume_id: uuid.UUID, session: Session = Depends(get_db)):
     The blob is removed only when no other row still cites that digest. Two
     candidates who uploaded the same file share one object, and one of them
     leaving must not break the other's spans.
+
+    **What it does not delete** (2026-10-04): the projects, jobs, skills,
+    achievements and certifications this resume held. They are the student's
+    record of what they have done, and they live on in the library — read in
+    here first if this resume never was. Deleting a resume is "forget this
+    document", not "forget that I built this"; the library has its own remove.
+
+    And when the deleted resume was the ACTIVE one, the newest remaining resume
+    becomes active, so every module asking for "the student's resume" gets one
+    rather than an empty answer while older versions sit there.
     """
     resume = _require(session, resume_id)
     digest = resume.content_sha256
     source_digest = resume.source_sha256
     source_suffix = "pdf" if resume.mime == "application/pdf" else "docx"
+    candidate_id, was_active = resume.candidate_id, resume.is_active
+
+    if resume.parse_status == "ready" or resume.confirmed:
+        library.sync(session, resume)
+        session.flush()
+    marker = session.get(LibrarySynced, resume_id)
+    if marker:
+        session.delete(marker)
 
     contact = session.get(ResumeContact, resume_id)
     if contact:
@@ -1700,6 +1758,20 @@ def delete_resume(resume_id: uuid.UUID, session: Session = Depends(get_db)):
         session.delete(event)
     session.delete(resume)
     session.commit()
+
+    if was_active:
+        # Not a failed upload: those rows are kept as a record and are never
+        # anybody's resume (a failure must not supersede a working one).
+        newest = session.exec(
+            select(Resume)
+            .where(Resume.candidate_id == candidate_id)
+            .where(Resume.parse_status != "failed")
+            .order_by(Resume.created_at.desc())  # type: ignore[attr-defined]
+        ).first()
+        if newest is not None:
+            newest.is_active = True
+            session.add(newest)
+            session.commit()
 
     others = session.exec(select(Resume).where(Resume.content_sha256 == digest)).first()
     if others is None:
@@ -1721,6 +1793,157 @@ def delete_resume(resume_id: uuid.UUID, session: Session = Depends(get_db)):
 
             remove_bytes(source_digest, suffix=source_suffix)
     return None
+
+
+# ---------------------------------------------------------------------------
+#  The library: what the student has had on any resume, kept (2026-10-04)
+# ---------------------------------------------------------------------------
+
+LibraryKind = Literal["experience", "project", "achievement", "certification", "education", "skill"]
+
+
+class LibraryItemOut(BaseModel):
+    id: uuid.UUID
+    kind: LibraryKind
+    text: str
+    #: The line it sat under — a project's title, a job's role.
+    context: str
+    #: Ids of the resumes it was on, deleted ones included: "it was on the
+    #: August version" is part of the record.
+    sources: list[str]
+    #: Added or reworded by the student rather than read off an upload.
+    user_written: bool
+    first_seen: datetime
+    last_seen: datetime
+
+
+class LibraryOut(BaseModel):
+    candidate_id: uuid.UUID
+    #: The order a resume reads in, and the order to show them.
+    kinds: list[LibraryKind]
+    items: list[LibraryItemOut]
+
+
+class LibraryItemIn(BaseModel):
+    kind: LibraryKind
+    text: str = Field(min_length=1, max_length=600)
+    context: str = Field(default="", max_length=160)
+
+
+class LibraryItemPatch(BaseModel):
+    kind: LibraryKind | None = None
+    text: str | None = Field(default=None, min_length=1, max_length=600)
+    context: str | None = Field(default=None, max_length=160)
+
+
+def _item_out(item: LibraryItem) -> LibraryItemOut:
+    return LibraryItemOut.model_validate(item, from_attributes=True)
+
+
+def _own_item(session: Session, candidate_id: uuid.UUID, item_id: uuid.UUID) -> LibraryItem:
+    """The item, if it is this student's. Another student's id is a 404, not a
+    403: which ids exist is not something a stranger gets to learn."""
+    item = session.get(LibraryItem, item_id)
+    if item is None or item.candidate_id != candidate_id:
+        raise HTTPException(status_code=404, detail="Not in this library")
+    return item
+
+
+@router.get("/resumes/candidate/{candidate_id}/library", response_model=LibraryOut)
+def get_library(candidate_id: uuid.UUID, session: Session = Depends(get_db)) -> LibraryOut:
+    """Everything the student has had on a resume, by kind.
+
+    Resumes uploaded before the library existed are read into it here, once.
+    """
+    library.backfill(session, candidate_id)
+    session.commit()
+    rows = session.exec(select(LibraryItem).where(LibraryItem.candidate_id == candidate_id)).all()
+    # By kind; within a kind the latest upload's items first (a student's
+    # current work leads, last year's test resume does not), and within one
+    # upload the order the resume had them.
+    order = {kind: index for index, kind in enumerate(library.KINDS)}
+    rows = sorted(
+        rows,
+        key=lambda r: (order.get(r.kind, len(order)), -r.last_seen.timestamp(), r.first_seen),
+    )
+    return LibraryOut(
+        candidate_id=candidate_id,
+        kinds=list(library.KINDS),
+        items=[_item_out(r) for r in rows],
+    )
+
+
+@router.post(
+    "/resumes/candidate/{candidate_id}/library",
+    response_model=LibraryItemOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_library_item(
+    candidate_id: uuid.UUID, payload: LibraryItemIn, session: Session = Depends(get_db)
+) -> LibraryItemOut:
+    """The student adds something no resume has said yet — a new certification,
+    an award from last week. Adding what is already there returns that item."""
+    text = library.clean(payload.text)
+    if not text:
+        raise HTTPException(status_code=422, detail="Nothing left to add once cleaned")
+    draft = library.Draft(payload.kind, text, library.clean(payload.context), user_written=True)
+    added = library.add_drafts(session, candidate_id, [draft], source=None)
+    item = (
+        added[0]
+        if added
+        else library.find(session, candidate_id, payload.kind, library.normalise(text))
+    )
+    session.commit()
+    assert item is not None
+    session.refresh(item)
+    return _item_out(item)
+
+
+@router.patch("/resumes/candidate/{candidate_id}/library/{item_id}", response_model=LibraryItemOut)
+def edit_library_item(
+    candidate_id: uuid.UUID,
+    item_id: uuid.UUID,
+    payload: LibraryItemPatch,
+    session: Session = Depends(get_db),
+) -> LibraryItemOut:
+    """Reword an item, retitle it, or move it to another kind. Rewording it into
+    one the library already holds merges the two."""
+    item = _own_item(session, candidate_id, item_id)
+    if payload.text is not None and not library.clean(payload.text):
+        raise HTTPException(status_code=422, detail="Nothing left once cleaned")
+    library.edit(session, item, text=payload.text, context=payload.context, kind=payload.kind)
+    session.commit()
+    session.refresh(item)
+    return _item_out(item)
+
+
+@router.delete(
+    "/resumes/candidate/{candidate_id}/library/{item_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_library_item(
+    candidate_id: uuid.UUID, item_id: uuid.UUID, session: Session = Depends(get_db)
+) -> None:
+    """Remove one item. It comes back only if a NEW upload contains it."""
+    session.delete(_own_item(session, candidate_id, item_id))
+    session.commit()
+
+
+@router.delete("/resumes/candidate/{candidate_id}/library", status_code=status.HTTP_204_NO_CONTENT)
+def clear_library(candidate_id: uuid.UUID, session: Session = Depends(get_db)) -> None:
+    """Remove every item — the library's own right to erasure, since deleting a
+    resume deliberately leaves it alone. The resumes still on file are not read
+    back in; the next upload starts it again."""
+    for item in session.exec(
+        select(LibraryItem).where(LibraryItem.candidate_id == candidate_id)
+    ).all():
+        session.delete(item)
+    # Resumes uploaded before the library existed would otherwise be read in on
+    # the next visit, refilling what the student just cleared.
+    for resume in session.exec(select(Resume).where(Resume.candidate_id == candidate_id)).all():
+        if session.get(LibrarySynced, resume.id) is None:
+            session.add(LibrarySynced(resume_id=resume.id, candidate_id=candidate_id))
+    session.commit()
 
 
 class ShareIn(BaseModel):

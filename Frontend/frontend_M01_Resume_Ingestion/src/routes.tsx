@@ -39,6 +39,7 @@ import { Route } from "react-router-dom";
 import { AuditPage } from "./components/AuditPage";
 import { DiffPage } from "./components/DiffPage";
 import { IngestPage, SkippedPage } from "./components/IngestPage";
+import { LibraryPage } from "./components/LibraryPage";
 import { PrivacyPage } from "./components/PrivacyPage";
 import { QualityPage } from "./components/QualityPage";
 import { ResumePage } from "./components/ResumePage";
@@ -57,6 +58,7 @@ export const M01_HOME = "/resume";
 export const m01Routes = (
   <Route key="m01">
     <Route path="/resume" element={<IngestPage />} />
+    <Route path="/resume/library" element={<LibraryPage />} />
     <Route path="/resumes/:resumeId" element={<ResumePage />} />
     <Route path="/resumes/:resumeId/review" element={<ReviewPage />} />
     <Route path="/resumes/:resumeId/target" element={<TargetJobPage />} />

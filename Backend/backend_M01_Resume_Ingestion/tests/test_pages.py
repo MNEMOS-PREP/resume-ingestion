@@ -249,3 +249,26 @@ def test_a_file_two_students_share_survives_one_of_them_deleting(client, session
     assert storage.get_bytes(digest, suffix="pdf") is not None, (
         "one student's deletion removed another student's file"
     )
+
+
+def test_a_reupload_gives_a_row_without_its_original_the_page_back(client, session, m04_up):
+    """Resumes read before the file was kept have no page to draw. Uploading the
+    same file again is reused (EC-1.8) — and used to throw the bytes away, so
+    "re-upload it" could never bring the page back. Found 2026-10-04 on a real
+    resume uploaded in August."""
+    from backend_M01_Resume_Ingestion.models import Resume
+
+    m04_up()
+    candidate = str(uuid.uuid4())
+    first = _upload(client, candidate)
+    row = session.get(Resume, uuid.UUID(first["id"]))
+    row.source_sha256 = ""  # as every upload before FR-1.2 was stored
+    session.add(row)
+    session.commit()
+    assert client.get(f"/v1/resumes/{first['id']}/pages").json() == []
+
+    again = _upload(client, candidate)
+    assert again["id"] == first["id"], "the same file for the same student is the same resume"
+    pages = client.get(f"/v1/resumes/{first['id']}/pages").json()
+    assert len(pages) == 1
+    assert client.get(f"/v1/resumes/{first['id']}/pages/1").status_code == 200

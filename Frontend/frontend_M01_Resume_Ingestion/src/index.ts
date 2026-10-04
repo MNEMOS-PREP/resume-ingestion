@@ -43,6 +43,8 @@ export { DateEditor } from "./components/DateEditor";
 export { IngestPage, SkippedPage } from "./components/IngestPage";
 export { ResumePage } from "./components/ResumePage";
 export { ReviewPage } from "./components/ReviewPage";
+export { LibraryPage } from "./components/LibraryPage";
+export { DeleteResumeDialog } from "./components/DeleteResumeDialog";
 export { DiffPage } from "./components/DiffPage";
 export { AuditPage } from "./components/AuditPage";
 export { PrivacyPage } from "./components/PrivacyPage";

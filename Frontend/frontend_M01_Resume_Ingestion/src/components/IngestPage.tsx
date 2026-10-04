@@ -16,11 +16,13 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { PageHeader } from "@ai/core";
+import { Icon, PageHeader } from "@ai/core";
 
-import { useCandidateResumes, useCapabilities, useIngestResume, useUploadResume } from "../api";
+import { useCandidateResumes, useCapabilities, useIngestResume, useLibrary, useUploadResume } from "../api";
+import type { Resume } from "../types";
 import { BANDS } from "./bands";
 import { useCandidateId } from "./candidate-hook";
+import { DeleteResumeDialog } from "./DeleteResumeDialog";
 import { ParseProgress } from "./ParseProgress";
 import { ResumeDropzone } from "./ResumeDropzone";
 import { Btn, Panel, Section, SkeletonRows } from "../ui/primitives";
@@ -32,8 +34,10 @@ export function IngestPage() {
   const ingest = useIngestResume();
   const upload = useUploadResume();
   const existing = useCandidateResumes(candidateId);
+  const library = useLibrary(candidateId);
 
   const [parsing, setParsing] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<Resume | null>(null);
   const busy = ingest.isPending || upload.isPending;
 
   function go(resumeId: string) {
@@ -99,40 +103,83 @@ export function IngestPage() {
                   (claim) => claim.risk_band === "risky",
                 ).length;
                 return (
-                  <button
-                    key={resume.id}
-                    type="button"
-                    onClick={() =>
-                      navigate(resume.confirmed ? `/resumes/${resume.id}/review` : `/resumes/${resume.id}`)
-                    }
-                    className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2.5 text-left hover:text-brand"
-                  >
-                    <span className="truncate text-sm text-ink">
-                      {resume.filename ?? "Pasted text"}
-                      <span className="ml-2 text-ink-soft" data-numeric>
-                        {resume.claims.length} line
-                        {resume.claims.length === 1 ? "" : "s"} to defend
-                        {risky > 0 && (
-                          <>
-                            {" · "}
-                            <span aria-hidden>{BANDS.risky.icon}</span> {risky} risky
-                          </>
-                        )}
+                  <div key={resume.id} className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate(resume.confirmed ? `/resumes/${resume.id}/review` : `/resumes/${resume.id}`)
+                      }
+                      className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2.5 text-left hover:text-brand"
+                    >
+                      <span className="truncate text-sm text-ink">
+                        {resume.filename ?? "Pasted text"}
+                        <span className="ml-2 text-ink-soft" data-numeric>
+                          {resume.claims.length} line
+                          {resume.claims.length === 1 ? "" : "s"} to defend
+                          {risky > 0 && (
+                            <>
+                              {" · "}
+                              <span aria-hidden>{BANDS.risky.icon}</span> {risky} risky
+                            </>
+                          )}
+                        </span>
                       </span>
-                    </span>
-                    <span className="shrink-0 text-xs text-ink-faint">
-                      {!resume.is_active && "older version · "}
-                      {resume.confirmed ? "checked by you" : "not checked yet"}
-                    </span>
-                  </button>
+                      <span className="shrink-0 text-xs text-ink-faint">
+                        {!resume.is_active && "older version · "}
+                        {resume.confirmed ? "checked by you" : "not checked yet"}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRemoving(resume)}
+                      aria-label={`Remove ${resume.filename ?? "this pasted resume"}`}
+                      title="Remove this resume"
+                      className="grid size-8 shrink-0 place-items-center rounded-md text-ink-faint hover:bg-surface-sunken hover:text-contested"
+                    >
+                      <Icon name="trash" size={16} />
+                    </button>
+                  </div>
                 );
               })}
             </div>
           </Panel>
         )}
       </Section>
+
+      {/* The library outlives every resume above, so it is offered beside them
+          rather than inside any one of them. */}
+      {library.data && library.data.items.length > 0 && (
+        <Section label="Your library">
+          <Link to="/resume/library" className="block">
+            <Panel className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3 hover:border-line-strong">
+              <span className="text-sm text-ink">
+                Everything you've had on a resume, kept
+                <span className="ml-2 text-ink-soft" data-numeric>
+                  {librarySummary(library.data.items)}
+                </span>
+              </span>
+              <span className="text-sm font-medium text-brand">Open · build a new resume →</span>
+            </Panel>
+          </Link>
+        </Section>
+      )}
+
+      <DeleteResumeDialog resume={removing} onClose={() => setRemoving(null)} />
     </>
   );
+}
+
+function librarySummary(items: { kind: string }[]): string {
+  const count = (...kinds: string[]) => items.filter((item) => kinds.includes(item.kind)).length;
+  const parts = [
+    [count("experience", "project"), "project and job line", "project and job lines"],
+    [count("achievement", "certification"), "achievement or certification", "achievements & certifications"],
+    [count("skill"), "skill", "skills"],
+  ] as const;
+  return parts
+    .filter(([n]) => n > 0)
+    .map(([n, one, many]) => `${n} ${n === 1 ? one : many}`)
+    .join(" · ");
 }
 
 /**
