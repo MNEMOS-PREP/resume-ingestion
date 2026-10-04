@@ -1,5 +1,10 @@
 # M01 — TODO
 
+
+> **Completion: 92%** — 17 of 20 functional requirements met, 3 partially. From this module's own audited FR table. Functional requirements are not the whole spec: the acceptance gates, edge cases and screens are tracked separately below, and the remaining work is not spread evenly across them.
+>
+> _Method: `(met + ½ × partial) ÷ total`, from the FR table below, 2026-08-28. One measure applied the same way to all nineteen modules so they compare; it counts requirements, not screens or gates._
+
 Task list for taking **M01 Resume Ingestion & Claim Extraction** to 100% of
 [M01_Resume_Ingestion.md](M01_Resume_Ingestion.md).
 
@@ -16,6 +21,65 @@ Task list for taking **M01 Resume Ingestion & Claim Extraction** to 100% of
 Legend: ✅ done · 🟡 partly done · ⬜ not started
 
 ---
+
+### 2026-10-04 — Review & fix, and the library
+
+- ✅ **Review & fix** (`/resumes/:id/review`, `review.py`): eleven deterministic
+  checks in four groups; each failing line is a card — Apply fix, Fill the
+  blanks, Edit, Ignore, Practise defending it — beside the document showing
+  every applied edit. Counts, never a total (§15 decision 1). A fix removes
+  words or leaves a [blank]; it never adds a fact (§15 decision 2). Asked for
+  as the free answer to Resume Worded.
+- ✅ **Run on a real PDF, four checks said untrue things**, now fixed: counts
+  read as "no number"; 22 skills called unused (a skill is used when any
+  project or job line names it, and a list's label is not part of the name);
+  three blanks on a 53-word bullet; a before-and-after template on a patent.
+- ✅ **The library** (`library.py`, `/v1/resumes/candidate/{id}/library`,
+  `/resume/library`): every upload adds its project and job lines with their
+  titles, achievements, certifications, education and skills, de-duplicated
+  per student and read once per resume. Deleting a resume keeps them — the
+  record of progress — and asks first, in a dialog that says what goes and
+  what stays. "Build a new resume" turns a selection into resume text; the
+  review editor has "Pick from your library".
+- ✅ Deleting the current resume makes the newest remaining one current, never
+  a failed upload. Uploading an older version again makes it current (EC-1.9).
+  Re-uploading a file read before originals were kept attaches the original,
+  so its page view comes back.
+- ✅ One front door at `/resume`, standalone and in the shell; every page is
+  reachable in the shell; plain words. The hidden file input has a label (axe).
+- No requirement moves: the review and the library are beyond §4. 92% stands.
+
+### 2026-10-03 — `seed.py` is safe to run again
+
+- ✅ It gave every row a random id, so each run added the same two resumes again.
+  Ids are now derived from what is seeded, a row already there — by id or by
+  content, for a database the old script seeded — is left alone, and tables are
+  created first so it works before the module has ever started.
+  `Platform_Shell/start.bat seed` runs it with every other module's.
+- ✅ The model-key loader in `llm.py` reads the `keys.txt` beside the repos
+  (and `AI_KEYS_FILE`), as M02's always has.
+
+### 2026-10-03 — one session for the page (Platform_Core v0.12.0)
+
+- ✅ **`components/candidate.ts` is `@ai/core`'s session in this module's words.** It kept its
+  own id under its own localStorage key and set the page's identity headers
+  itself, as three other modules did, so in Platform_Shell the student was
+  whoever's module loaded last. The shell's sign-in screen sets the session
+  now; standalone signs in as the seeded student only when nobody is. The old
+  key is migrated, so no browser loses its student.
+- ✅ Pinned to v0.12.0 on both halves; the lockfile resolves `9ee259c`.
+
+### 2026-10-02 — Platform_Core v0.11.0, and the shared guard
+
+- ✅ Both halves move to Platform_Core **v0.11.0**: the backend from v0.9.0
+  (the lock file pins v0.11.0's commit), and the frontend from v0.9.1.
+- ✅ The router guard is Platform_Core's **`candidate_guard`**, replacing this
+  module's hand-written copy; M02 and M06 replaced theirs the same day. What
+  stays here is the resume-to-student lookup, read through `get_db` so the
+  test override still applies. Since v0.11.0 the guard also reads a student
+  named in the query.
+- ✅ `test_access.py` adds the shared stranger check from the OpenAPI
+  document, beside the hand-written checks with a real resume behind the id.
 
 ## 0. Ideas and scouting
 
