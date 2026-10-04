@@ -22,6 +22,33 @@ Legend: ✅ done · 🟡 partly done · ⬜ not started
 
 ---
 
+### 2026-10-04 — Review & fix, and the library
+
+- ✅ **Review & fix** (`/resumes/:id/review`, `review.py`): eleven deterministic
+  checks in four groups; each failing line is a card — Apply fix, Fill the
+  blanks, Edit, Ignore, Practise defending it — beside the document showing
+  every applied edit. Counts, never a total (§15 decision 1). A fix removes
+  words or leaves a [blank]; it never adds a fact (§15 decision 2). Asked for
+  as the free answer to Resume Worded.
+- ✅ **Run on a real PDF, four checks said untrue things**, now fixed: counts
+  read as "no number"; 22 skills called unused (a skill is used when any
+  project or job line names it, and a list's label is not part of the name);
+  three blanks on a 53-word bullet; a before-and-after template on a patent.
+- ✅ **The library** (`library.py`, `/v1/resumes/candidate/{id}/library`,
+  `/resume/library`): every upload adds its project and job lines with their
+  titles, achievements, certifications, education and skills, de-duplicated
+  per student and read once per resume. Deleting a resume keeps them — the
+  record of progress — and asks first, in a dialog that says what goes and
+  what stays. "Build a new resume" turns a selection into resume text; the
+  review editor has "Pick from your library".
+- ✅ Deleting the current resume makes the newest remaining one current, never
+  a failed upload. Uploading an older version again makes it current (EC-1.9).
+  Re-uploading a file read before originals were kept attaches the original,
+  so its page view comes back.
+- ✅ One front door at `/resume`, standalone and in the shell; every page is
+  reachable in the shell; plain words. The hidden file input has a label (axe).
+- No requirement moves: the review and the library are beyond §4. 92% stands.
+
 ### 2026-10-03 — `seed.py` is safe to run again
 
 - ✅ It gave every row a random id, so each run added the same two resumes again.
