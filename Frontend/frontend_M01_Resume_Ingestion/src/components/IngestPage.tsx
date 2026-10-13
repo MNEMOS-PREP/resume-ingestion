@@ -54,12 +54,44 @@ export function IngestPage() {
     );
   }
 
+  /*
+    A student who already has resumes came back for one of them, or to upload
+    a new version. The page used to greet them as a first-timer — "Let's start
+    with your resume", a dropzone first, a "Skip for now" under it — above the
+    list they came for (2026-10-13). Now their list comes first, the upload is
+    a new version, and there is nothing to skip.
+  */
+  const returning = (existing.data?.length ?? 0) > 0;
+  const dropzone = (
+    <Section label={returning ? "Upload a new version" : "Your resume"}>
+      <ResumeDropzone
+        capabilities={capabilities.data}
+        busy={busy}
+        error={upload.error ?? ingest.error}
+        onFile={(file) =>
+          upload.mutate({ candidateId, file }, { onSuccess: (resume) => go(resume.id) })
+        }
+        onText={(text) =>
+          ingest.mutate(
+            { candidate_id: candidateId, raw_text: text },
+            { onSuccess: (resume) => go(resume.id) },
+          )
+        }
+        onSkip={returning ? undefined : () => navigate("/skipped")}
+      />
+    </Section>
+  );
+
   return (
     <>
       <div className="mb-8">
         <PageHeader
-          title="Let’s start with your resume"
-          subtitle="We find every line an interviewer could ask you to defend — and which ones you can't explain yet."
+          title={returning ? "Your resumes" : "Let’s start with your resume"}
+          subtitle={
+            returning
+              ? "Open one to see the lines an interviewer would push on, or upload a new version."
+              : "We find every line an interviewer could ask you to defend — and which ones you can't explain yet."
+          }
           how={
             <p>
               Each line is read for what it claims and how hard it would be to back up in an
@@ -70,23 +102,7 @@ export function IngestPage() {
         />
       </div>
 
-      <Section label="Your resume">
-        <ResumeDropzone
-          capabilities={capabilities.data}
-          busy={busy}
-          error={upload.error ?? ingest.error}
-          onFile={(file) =>
-            upload.mutate({ candidateId, file }, { onSuccess: (resume) => go(resume.id) })
-          }
-          onText={(text) =>
-            ingest.mutate(
-              { candidate_id: candidateId, raw_text: text },
-              { onSuccess: (resume) => go(resume.id) },
-            )
-          }
-          onSkip={() => navigate("/skipped")}
-        />
-      </Section>
+      {!returning && dropzone}
 
       <Section label="Your resumes">
         {existing.isLoading && <SkeletonRows rows={2} />}
@@ -145,6 +161,8 @@ export function IngestPage() {
           </Panel>
         )}
       </Section>
+
+      {returning && dropzone}
 
       {/* The library outlives every resume above, so it is offered beside them
           rather than inside any one of them. */}

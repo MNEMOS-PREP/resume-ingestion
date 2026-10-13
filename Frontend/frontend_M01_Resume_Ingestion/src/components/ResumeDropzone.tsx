@@ -64,7 +64,9 @@ export function ResumeDropzone({
   error: unknown;
   onFile: (file: File) => void;
   onText: (text: string) => void;
-  onSkip: () => void;
+  /** FR-1.14's escape hatch. Omitted for a student who already has a resume:
+   *  there is nothing to skip. */
+  onSkip?: () => void;
 }) {
   const [text, setText] = useState("");
   const [dragging, setDragging] = useState(false);
@@ -222,15 +224,17 @@ export function ResumeDropzone({
 
       {/* FR-1.14, and it is a button because the requirement is a P0. A
           student with no resume must not be blocked from trying the product. */}
-      <div className="border-t border-line pt-4">
-        <Btn type="button" variant="secondary" onClick={onSkip}>
-          Skip for now &mdash; I&rsquo;ll practise without it
-        </Btn>
-        <p className="mt-1.5 text-xs text-ink-faint">
-          Everything except the resume-specific questions works without one, and you can add it
-          later.
-        </p>
-      </div>
+      {onSkip && (
+        <div className="border-t border-line pt-4">
+          <Btn type="button" variant="secondary" onClick={onSkip}>
+            Skip for now &mdash; I&rsquo;ll practise without it
+          </Btn>
+          <p className="mt-1.5 text-xs text-ink-faint">
+            Everything except the resume-specific questions works without one, and you can add it
+            later.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
