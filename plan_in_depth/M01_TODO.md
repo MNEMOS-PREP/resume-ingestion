@@ -22,6 +22,18 @@ Legend: ✅ done · 🟡 partly done · ⬜ not started
 
 ---
 
+### 2026-10-13 — a returning student's page opens on their resumes
+
+- ✅ **A student with resumes on file gets "Your resumes"** (`cabe6a4`): the
+  list first, the dropzone below it as "Upload a new version", and no "Skip
+  for now", since there is nothing to skip. A student with five resumes was
+  greeted as a first-timer ("Let's start with your resume") above the list
+  they came back for (2026-10-13 UI sweep). A first-timer's page is
+  unchanged; FR-1.14's escape hatch is still there whenever there is no
+  resume.
+- No requirement moves. Counted 2026-10-17 by running the suite: **352
+  passed**, **27** gates.
+
 ### 2026-10-04 — Review & fix, and the library
 
 - ✅ **Review & fix** (`/resumes/:id/review`, `review.py`): eleven deterministic
