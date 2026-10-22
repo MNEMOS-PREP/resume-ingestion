@@ -22,6 +22,19 @@ Legend: ✅ done · 🟡 partly done · ⬜ not started
 
 ---
 
+### 2026-10-22 — a drill M06 refuses says why (`f8ad4e8`)
+
+- ✅ **"In progress", not "did not accept"**: when M06 answers a drill with
+  409 because the student already has an interview running, the hand-off
+  says "You have an interview in progress. Finish or end it, then start the
+  drill", and links to it (`session_url`). Until now every refusal read "the
+  interview engine is running but did not accept the drill", and a student who
+  had left a drill open could not tell why the next one would not start. Any
+  other failure keeps that message (`_drill_refused`). M06 now also lets a
+  new session replace a live drill, and ends a drill the student leaves
+  (M06's realism overhaul, `Mock_Interview_Engine/plan_in_depth/M06_OVERHAUL.md`).
+- Tests: the 409 case in `test_api.py` — 353 passed, lint clean.
+
 ### 2026-10-13 — a returning student's page opens on their resumes
 
 - ✅ **A student with resumes on file gets "Your resumes"** (`cabe6a4`): the
