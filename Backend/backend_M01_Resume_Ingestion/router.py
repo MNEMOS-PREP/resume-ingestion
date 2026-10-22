@@ -39,6 +39,7 @@ import logging
 import math
 import re
 import time
+import urllib.error
 import urllib.request
 import uuid
 from copy import deepcopy
@@ -1496,18 +1497,34 @@ def start_drill(
         )
         with urllib.request.urlopen(request, timeout=5.0) as response:
             body = json.loads(response.read())
-    except Exception as exc:  # noqa: BLE001 - an upstream that fails degrades
-        log.info("M01 drill handoff to M06 failed: %s", exc)
+    except urllib.error.HTTPError as exc:
+        if exc.code != 409:
+            log.info("M01 drill handoff to M06 failed: %s", exc)
+            return _drill_refused(claim_id, questions)
+        # 2026-10-22: M06 answers 409 when the student already has an
+        # interview open. That is not the engine refusing the drill, and
+        # saying so sent students looking for a fault; it names the interview
+        # to finish, and links to it.
+        live = None
+        try:
+            live = (json.loads(exc.read() or b"{}").get("detail") or {}).get("session_id")
+        except (ValueError, AttributeError):
+            live = None
         return DrillHandoff(
             claim_id=claim_id,
             questions=questions,
             available=False,
-            needs_module="M06",
+            needs_module=None,
+            session_id=live,
+            session_url=f"/mock/{live}" if live else None,
             explanation=(
-                "The interview engine is running but did not accept the drill. "
-                "The questions are below — they are the same ones it would ask."
+                "You have an interview in progress. Finish or end it, then start the drill — "
+                "the questions are below in the meantime."
             ),
         )
+    except Exception as exc:  # noqa: BLE001 - an upstream that fails degrades
+        log.info("M01 drill handoff to M06 failed: %s", exc)
+        return _drill_refused(claim_id, questions)
 
     emit(
         session,
@@ -1524,6 +1541,19 @@ def start_drill(
         available=True,
         session_id=str(body.get("session_id") or body.get("id") or ""),
         session_url=body.get("url") or body.get("session_url"),
+    )
+
+
+def _drill_refused(claim_id: str, questions: list[str]) -> DrillHandoff:
+    return DrillHandoff(
+        claim_id=claim_id,
+        questions=questions,
+        available=False,
+        needs_module="M06",
+        explanation=(
+            "The interview engine is running but did not accept the drill. "
+            "The questions are below — they are the same ones it would ask."
+        ),
     )
 
 

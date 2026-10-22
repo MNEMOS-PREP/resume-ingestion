@@ -314,6 +314,44 @@ def test_the_drill_forwards_the_students_identity_to_m06(client, m04_up, monkeyp
     ]
 
 
+def test_an_interview_in_progress_is_named_not_blamed_on_the_engine(client, m04_up, monkeypatch):
+    """2026-10-22. M06 answers 409 while the student has an interview open,
+    and this said "the interview engine did not accept the drill" — a fault
+    that was not there. It names the interview to finish, and links to it."""
+    import io
+    import json
+    import time
+    import urllib.error
+    import urllib.request
+
+    from backend_M01_Resume_Ingestion import router as router_module
+
+    m04_up()
+    data = _ingest(client, DRILLABLE)
+    claim_id = data["claims"][0]["id"]
+    registry = router_module.dependency_registry()
+    registry._cache["M06"] = (time.monotonic(), True, "healthy (test)")
+    live = str(uuid.uuid4())
+    m04_urlopen = urllib.request.urlopen
+
+    def fake(request, timeout=None):
+        if not request.full_url.startswith("http://127.0.0.1:8106"):
+            return m04_urlopen(request, timeout=timeout)
+        body = json.dumps({"detail": {"message": "in progress", "session_id": live}}).encode()
+        raise urllib.error.HTTPError(request.full_url, 409, "Conflict", {}, io.BytesIO(body))
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    res = client.post(f"/v1/resumes/{data['id']}/claims/{claim_id}/drill")
+
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["available"] is False
+    assert "in progress" in body["explanation"]
+    assert "did not accept" not in body["explanation"]
+    assert body["session_url"] == f"/mock/{live}"
+    assert body["questions"], "the questions are still theirs to answer"
+
+
 def test_a_drill_on_a_claim_that_is_not_there_is_a_404(client, m04_up):
     """The one case that IS an error. A missing upstream degrades; a claim id
     that does not exist is the caller being wrong."""
