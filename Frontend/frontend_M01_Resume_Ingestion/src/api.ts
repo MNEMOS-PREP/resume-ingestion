@@ -645,36 +645,75 @@ export function useRevokeShare(resumeId: string) {
  * means either buffering it into one value (losing the narration, which is the
  * entire point) or re-running it on every cache event.
  *
- * Returns an unsubscribe function. `EventSource` reconnects on its own after a
- * drop, which for a finished parse would replay the whole narration, so the
- * source is closed as soon as the `complete` stage arrives.
+ * Returns an unsubscribe function. The stream is read once and not resumed:
+ * the parse is finished before anyone subscribes, so a reconnect would only
+ * replay the narration.
+ *
+ * **Not `EventSource`.** It cannot send headers, and the stream is
+ * candidate-scoped like every other route here: it answered 403 "Not signed
+ * in." on every upload (walkthrough, 2026-10-29), and the narration never
+ * played. So it is read with `fetch`, the way M06 reads its interview stream.
  */
 export function subscribeToProgress(
   resumeId: string,
   onEvent: (event: ProgressEvent) => void,
   onDone?: () => void,
 ): () => void {
-  const source = new EventSource(`${BASE}/v1/resumes/${resumeId}/stream`);
-
+  const controller = new AbortController();
+  let done = false;
   const finish = () => {
-    source.close();
+    if (done) return;
+    done = true;
+    controller.abort();
     onDone?.();
   };
 
-  source.onmessage = (message) => {
+  const dispatch = (frame: string) => {
+    const data = frame
+      .split("\n")
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trimStart())
+      .join("");
+    if (!data) return;
     try {
-      const parsed = JSON.parse(message.data) as ProgressEvent;
+      const parsed = JSON.parse(data) as ProgressEvent;
       onEvent(parsed);
       if (parsed.stage === "complete") finish();
     } catch {
       /* a malformed frame is not worth tearing the stream down for */
     }
   };
-  // An error after the last frame is the server closing a finished stream,
-  // which is not a failure. The screen has the stages either way.
-  source.onerror = finish;
 
-  return () => source.close();
+  void (async () => {
+    try {
+      const response = await fetch(`${BASE}/v1/resumes/${resumeId}/stream`, {
+        headers: { Accept: "text/event-stream", ...identityHeaders() },
+        signal: controller.signal,
+      });
+      if (!response.ok || !response.body) return;
+      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+      let buffer = "";
+      for (;;) {
+        const { done: ended, value } = await reader.read();
+        if (ended) break;
+        // Frames are separated by a blank line; keep the tail.
+        const frames = (buffer + value).replace(/\r\n/g, "\n").split("\n\n");
+        buffer = frames.pop() ?? "";
+        for (const frame of frames) dispatch(frame);
+      }
+      if (buffer) dispatch(buffer);
+    } catch {
+      /* stopped, or dropped: the screen has the stages either way */
+    } finally {
+      // The server closing a finished stream is not a failure.
+      finish();
+    }
+  })();
+
+  return () => {
+    done = true;
+    controller.abort();
+  };
 }
 
 /* ------------------------------------------------------------------ */
