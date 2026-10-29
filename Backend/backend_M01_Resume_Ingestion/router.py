@@ -994,20 +994,20 @@ def stream_progress(resume_id: uuid.UUID, session: Session = Depends(get_db)):
     resume = _require(session, resume_id)
 
     stages = [
-        ("intake", f"Read {resume.page_count} page(s)" if resume.page_count else "Read your text"),
+        ("intake", f"Read {_count(resume.page_count, 'page')}" if resume.page_count else "Read your text"),
         (
             "layout",
-            "Read this from an image" if resume.ocr_used else f"Found {resume.columns} column(s)",
+            "Read this from an image" if resume.ocr_used else f"Found {_count(resume.columns, 'column')}",
         ),
-        ("segment", f"Found {len(resume.sections)} section(s)"),
+        ("segment", f"Found {_count(len(resume.sections), 'section')}"),
         ("entities", _entities_detail(resume)),
-        ("claims", f"Extracted {len(resume.claims)} claim(s)"),
+        ("claims", f"Extracted {_count(len(resume.claims), 'claim')}"),
         ("scoring", _band_detail(resume)),
         (
             "probes",
-            f"Prepared {sum(len(c.get('probes', [])) for c in resume.claims)} question(s)",
+            f"Prepared {_count(sum(len(c.get('probes', [])) for c in resume.claims), 'question')}",
         ),
-        ("flags", f"Checked for {len(resume.red_flags)} thing(s) worth knowing"),
+        ("flags", f"Checked for {_count(len(resume.red_flags), 'thing')} worth knowing"),
     ]
 
     def events():
@@ -1041,17 +1041,22 @@ def stream_progress(resume_id: uuid.UUID, session: Session = Depends(get_db)):
     )
 
 
+def _count(n: int, noun: str) -> str:
+    """"1 page", "3 pages" — the narration read "Read 1 page(s)" (2026-10-29)."""
+    return f"{n} {noun}{'' if n == 1 else 's'}"
+
+
 def _entities_detail(resume: Resume) -> str:
     entities = resume.entities or {}
     return (
-        f"Recognised {len(entities.get('education', []))} qualification(s) "
-        f"and {len(entities.get('roles', []))} role(s)"
+        f"Recognised {_count(len(entities.get('education', [])), 'qualification')} "
+        f"and {_count(len(entities.get('roles', [])), 'role')}"
     )
 
 
 def _band_detail(resume: Resume) -> str:
     risky = sum(1 for c in resume.claims if c.get("risk_band") == "risky")
-    return f"{len(resume.claims)} claim(s) scored, {risky} look risky"
+    return f"{_count(len(resume.claims), 'claim')} scored, {risky} {'looks' if risky == 1 else 'look'} risky"
 
 
 def _require(session: Session, resume_id: uuid.UUID) -> Resume:
