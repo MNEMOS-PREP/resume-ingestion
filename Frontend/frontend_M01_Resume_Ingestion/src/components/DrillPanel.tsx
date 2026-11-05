@@ -24,7 +24,7 @@
  * do teaches them it is unfinished, which is true and recoverable.
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { useStartDrill } from "../api";
 import { Btn, Panel, SkeletonRows } from "../ui/primitives";
@@ -52,8 +52,16 @@ export function DrillPanel({
   //
   // The student already pressed the button that mounted this, so it starts by
   // itself; asking them to press a second one is a step with no decision in it.
+  //
+  // Once per claim. StrictMode runs an effect twice in development, and each
+  // run was a POST: two drill sessions, one of them left `planned` for good,
+  // which the mock page then offered as "your interview in progress" with no
+  // way to clear it (2026-11-06).
   const { mutate } = drill;
+  const sent = useRef<string | null>(null);
   useEffect(() => {
+    if (sent.current === claimId) return;
+    sent.current = claimId;
     mutate(claimId);
   }, [mutate, claimId]);
 
