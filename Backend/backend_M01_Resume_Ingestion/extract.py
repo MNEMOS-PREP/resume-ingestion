@@ -266,14 +266,25 @@ def _list_lines(text: str) -> list[str]:
             remainder = (heading.group(2) or "").strip()
             if remainder:
                 # "Required: Python, SQL" - the list is on the heading line.
+                # Under an open list this is one category among siblings
+                # ("Libraries: OpenCV" between "Programming:" and "Databases:"),
+                # so the list stays open: closing it here dropped every
+                # category line after the first one that happened to be a
+                # known heading.
                 out.append(remainder)
-                in_list = False
             else:
                 # "SKILLS" alone - the list is on the lines that follow.
                 in_list = True
             continue
 
         if in_list:
+            if _ends_list(line):
+                in_list = False
+                continue
+            # "Databases: PostgreSQL, Redis" - the label names the category,
+            # the items are the skills. Kept, it glued itself to the first
+            # item and "Programming: Python" resolved to nothing.
+            line = _without_category(line)
             # A prose bullet under a skills heading is still prose; a line with
             # no delimiter and more than MAX_WORDS words is a sentence.
             if _DELIMITERS.search(line) or len(line.split()) <= MAX_WORDS:
@@ -282,6 +293,32 @@ def _list_lines(text: str) -> list[str]:
                 in_list = False
 
     return out
+
+
+#: "Frameworks & Tools: React, Git". A short label, a colon, then the items.
+#: No dot in the label, so "e.g.:" and "Node.js: Express" are left alone.
+_CATEGORY_LABEL = re.compile(
+    r"^\s*(?:[-*•·]\s*)?(?P<label>[A-Za-z][A-Za-z&/+\- ]*?)\s*:\s+(?P<items>\S.*)$"
+)
+
+
+def _without_category(line: str) -> str:
+    """The items of a "Category: a, b, c" line, or the line unchanged."""
+    match = _CATEGORY_LABEL.match(line)
+    if match and len(match.group("label").split()) <= 4:
+        return match.group("items")
+    return line
+
+
+def _ends_list(line: str) -> bool:
+    """A line that is another section's heading ("EXPERIENCE", "Projects").
+
+    Needed now that a category line no longer closes the list: the list must
+    still stop where the next section starts, or that section's title is read
+    as one more skill.
+    """
+    found = headings.lookup(line)
+    return found is not None and found[1] >= 0.85 and found[0] != "skills"
 
 
 def extract_surface_forms(text: str) -> list[str]:

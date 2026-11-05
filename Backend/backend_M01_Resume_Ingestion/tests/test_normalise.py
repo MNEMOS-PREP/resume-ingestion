@@ -248,6 +248,32 @@ def test_a_run_up_is_peeled_before_the_length_cap():
     assert "Java" in forms and "Python" in forms
 
 
+def test_every_category_line_of_a_skills_section_is_read():
+    """A real resume's SKILLS block, one category per line (2026-11-05).
+
+    "Libraries:" is a known heading, and a heading line carrying its own items
+    used to close the list, so every category after it vanished: React, Git,
+    Docker, PostgreSQL and the rest of this student's skills never reached M02.
+    The categories that are not headings ("Programming:") stuck to their first
+    item instead, so "Programming: Python" stood in for Python.
+    """
+    from backend_M01_Resume_Ingestion.extract import extract_surface_forms
+
+    forms = extract_surface_forms(
+        "TECHNICAL SKILLS\n"
+        "Programming: Python, Java, SQL\n"
+        "Libraries: OpenCV, NumPy\n"
+        "Databases: PostgreSQL, Redis\n"
+        "Frameworks & Tools: React, Git, Docker\n"
+        "EXPERIENCE\n"
+        "Machine Learning Intern\n"
+    )
+
+    assert forms == [
+        "Python", "Java", "SQL", "OpenCV", "NumPy", "PostgreSQL", "Redis", "React", "Git", "Docker",
+    ]
+
+
 def test_a_project_bullet_is_still_not_a_skills_list():
     """The guard that has to survive every extraction change.
 
