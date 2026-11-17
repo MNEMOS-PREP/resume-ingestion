@@ -30,7 +30,7 @@ import { Link, useParams } from "react-router-dom";
 
 import { useResume } from "../api";
 import { useCandidateId } from "./candidate-hook";
-import { m02Link } from "../links";
+import { m02Href } from "../links";
 import { Empty, Panel, Section, SkeletonRows } from "../ui/primitives";
 
 export function TargetJobPage() {
@@ -65,6 +65,7 @@ export function TargetJobPage() {
   }
 
   const data = resume.data;
+  const jd = m02Href("/jd", candidateId);
   const skillCount = data.parsed_skills.length;
   const grade = (data.entities?.education ?? []).find(
     (entry: { grade?: string | null }) => entry.grade,
@@ -148,12 +149,23 @@ export function TargetJobPage() {
       </Section>
 
       <div className="mt-6 flex flex-wrap items-center gap-4">
-        <a
-          href={m02Link("/", candidateId)}
-          className="rounded-md bg-brand px-3.5 py-2 text-sm font-medium text-white hover:bg-brand-hover"
-        >
-          Yes &mdash; paste the job description
-        </a>
+        {/* In the platform shell the job description screen is a route of this
+            same app, so the student stays where they are (2026-11-17). */}
+        {jd.external ? (
+          <a
+            href={jd.href}
+            className="rounded-md bg-brand px-3.5 py-2 text-sm font-medium text-white hover:bg-brand-hover"
+          >
+            Yes &mdash; tailor it to a job description
+          </a>
+        ) : (
+          <Link
+            to={jd.href}
+            className="rounded-md bg-brand px-3.5 py-2 text-sm font-medium text-white hover:bg-brand-hover"
+          >
+            Yes &mdash; tailor it to a job description
+          </Link>
+        )}
         <Link
           to={`/resumes/${resumeId}`}
           className="text-sm text-ink-soft hover:text-ink"
@@ -162,13 +174,13 @@ export function TargetJobPage() {
         </Link>
       </div>
 
-      <p className="mt-4 text-xs text-ink-faint">
+      {jd.external && <p className="mt-4 text-xs text-ink-faint">
         The job description opens in the JD parser, which is a different screen
         on a different port. Your candidate id travels with the link so the
         analysis is about you and not about whoever that browser last looked at
         &mdash; there is no shared sign-in yet, and this is what stands in for
         one.
-      </p>
+      </p>}
     </div>
   );
 }

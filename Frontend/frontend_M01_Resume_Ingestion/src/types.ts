@@ -731,3 +731,130 @@ export interface LibraryItemPatch {
   text?: string;
   context?: string;
 }
+
+/* ------------------------------------------------------------------ */
+/*  Tailored copies (2026-11-17) — `tailor.py`, `tailored_api.py`      */
+/* ------------------------------------------------------------------ */
+
+export type TailoredBlockKind =
+  | "name"
+  | "contact"
+  | "heading"
+  | "entry"
+  | "subtitle"
+  | "bullet"
+  | "text";
+
+/** One line or paragraph of a tailored copy, pointing back at the original. */
+export interface TailoredBlock {
+  id: string;
+  kind: TailoredBlockKind;
+  /** The section kind it sits in (`experience`, `skills`…). */
+  section: string;
+  section_id: string | null;
+  /** The entry (role, degree, project) it belongs to: that entry's block id. */
+  group: string | null;
+  text: string;
+  /** What it said when the copy was made. Empty for a line the student added. */
+  original: string;
+  /** An entry's dates, printed on the right. */
+  aside: string | null;
+  claim_id: string | null;
+  /** [start, end) in the source resume's text. None for an added line. */
+  span: [number, number] | null;
+  /** Holds masked contact characters: hidden or moved, never retyped. */
+  masked: boolean;
+  hidden: boolean;
+  added: boolean;
+  edited: boolean;
+  locked: boolean;
+}
+
+export interface TailoredResume {
+  id: string;
+  resume_id: string;
+  candidate_id: string;
+  label: string;
+  target_kind: string;
+  /** Opaque to M01: M02's job description id. */
+  target_ref: string;
+  revision: number;
+  style: { page: [number, number]; margin: number[]; size: number; family: string; source: string };
+  blocks: TailoredBlock[];
+  edited: number;
+  name: string | null;
+  filename: string | null;
+  /** The picture this copy prints (2026-11-17). */
+  photo: {
+    /** `profile` (set in Settings), `original` (on the uploaded resume), or none. */
+    available: "profile" | "original" | null;
+    /** The student's choice for this copy. */
+    enabled: boolean;
+    /** Changes when the picture does. */
+    digest: string | null;
+  };
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TailoredRevision {
+  n: number;
+  action: "created" | "edit" | "hide" | "show" | "insert" | "move" | "restore" | "style";
+  block_id: string | null;
+  before: string | null;
+  after: string | null;
+  /** `manual`, or `jd:<suggestion key>` when a suggestion was applied. */
+  source: string;
+  note: string | null;
+  created_at: string;
+}
+
+/** One laid-out line of a block on the generated PDF, in PDF points. */
+export interface PageBox {
+  page: number;
+  rect: [number, number, number, number];
+  /** The character range of the block's text this line shows. */
+  start: number;
+  end: number;
+}
+
+export interface TailoredLayout {
+  revision: number;
+  pages: { page: number; width: number; height: number }[];
+  boxes: Record<string, PageBox[]>;
+}
+
+export interface TailoredBlockPatch {
+  text?: string;
+  aside?: string;
+  hidden?: boolean;
+  source?: string;
+  note?: string;
+  expect_revision?: number;
+}
+
+export interface TailoredBlockInsert {
+  after: string;
+  text: string;
+  kind?: "bullet" | "text";
+  source?: string;
+  note?: string;
+}
+
+export interface TailoredBlockMove {
+  block_id: string;
+  before: string | null;
+  source?: string;
+  note?: string;
+}
+
+/** `POST …/blocks/{id}/rewrite` — a draft, or why there is none. */
+export interface TargetedRewrite {
+  original: string;
+  suggestion: string | null;
+  adds: string[];
+  supported: boolean;
+  why: string | null;
+  refused: string | null;
+  by_model: boolean;
+}

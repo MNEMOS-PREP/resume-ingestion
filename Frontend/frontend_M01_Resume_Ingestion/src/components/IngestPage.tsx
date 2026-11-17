@@ -16,14 +16,14 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { Icon, PageHeader } from "@ai/core";
+import { PageHeader } from "@ai/core";
 
 import { useCandidateResumes, useCapabilities, useIngestResume, useLibrary, useUploadResume } from "../api";
 import type { Resume } from "../types";
-import { BANDS } from "./bands";
 import { useCandidateId } from "./candidate-hook";
 import { DeleteResumeDialog } from "./DeleteResumeDialog";
 import { ParseProgress } from "./ParseProgress";
+import { ResumeList } from "./ResumeList";
 import { ResumeDropzone } from "./ResumeDropzone";
 import { Btn, Panel, Section, SkeletonRows } from "../ui/primitives";
 
@@ -112,53 +112,13 @@ export function IngestPage() {
           </Panel>
         )}
         {existing.data && existing.data.length > 0 && (
-          <Panel className="px-4 py-1">
-            <div className="divide-y divide-line">
-              {existing.data.map((resume) => {
-                const risky = resume.claims.filter(
-                  (claim) => claim.risk_band === "risky",
-                ).length;
-                return (
-                  <div key={resume.id} className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        navigate(resume.confirmed ? `/resumes/${resume.id}/review` : `/resumes/${resume.id}`)
-                      }
-                      className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2.5 text-left hover:text-brand"
-                    >
-                      <span className="truncate text-sm text-ink">
-                        {resume.filename ?? "Pasted text"}
-                        <span className="ml-2 text-ink-soft" data-numeric>
-                          {resume.claims.length} line
-                          {resume.claims.length === 1 ? "" : "s"} to defend
-                          {risky > 0 && (
-                            <>
-                              {" · "}
-                              <span aria-hidden>{BANDS.risky.icon}</span> {risky} risky
-                            </>
-                          )}
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-xs text-ink-faint">
-                        {!resume.is_active && "older version · "}
-                        {resume.confirmed ? "checked by you" : "not checked yet"}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setRemoving(resume)}
-                      aria-label={`Remove ${resume.filename ?? "this pasted resume"}`}
-                      title="Remove this resume"
-                      className="grid size-8 shrink-0 place-items-center rounded-md text-ink-faint hover:bg-surface-sunken hover:text-contested"
-                    >
-                      <Icon name="trash" size={16} />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </Panel>
+          <ResumeList
+            resumes={existing.data}
+            onOpen={(resume) =>
+              navigate(resume.confirmed ? `/resumes/${resume.id}/review` : `/resumes/${resume.id}`)
+            }
+            onRemove={setRemoving}
+          />
         )}
       </Section>
 

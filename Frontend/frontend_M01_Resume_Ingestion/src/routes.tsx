@@ -44,6 +44,7 @@ import { PrivacyPage } from "./components/PrivacyPage";
 import { QualityPage } from "./components/QualityPage";
 import { ResumePage } from "./components/ResumePage";
 import { ReviewPage } from "./components/ReviewPage";
+import { TailoredVersionPage } from "./components/TailoredVersionPage";
 import { TargetJobPage } from "./components/TargetJobPage";
 
 /** Where this module's front door is, standalone and in the shell alike. */
@@ -62,6 +63,9 @@ export const m01Routes = (
     <Route path="/resumes/:resumeId" element={<ResumePage />} />
     <Route path="/resumes/:resumeId/review" element={<ReviewPage />} />
     <Route path="/resumes/:resumeId/target" element={<TargetJobPage />} />
+    {/* A version of this resume (a tailored copy), edited beside its PDF.
+        The uploaded resume is never written by anything on it (2026-11-17). */}
+    <Route path="/resumes/:resumeId/versions/:tailoredId" element={<TailoredVersionPage />} />
     <Route path="/resumes/:resumeId/diff" element={<DiffPage />} />
     <Route path="/resumes/:resumeId/audit" element={<AuditPage />} />
     <Route path="/resumes/:resumeId/privacy" element={<PrivacyPage />} />

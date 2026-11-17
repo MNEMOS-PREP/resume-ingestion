@@ -33,3 +33,22 @@ export function m02Link(path: string, candidateId: string): string {
   url.searchParams.set("candidate", candidateId);
   return url.toString();
 }
+
+/**
+ * Whether this tree is M01's own app on :5201 rather than mounted in the
+ * platform shell, where every module shares one origin (2026-11-17).
+ *
+ * In the shell, M02's screens are routes of the same app, so a link to one is
+ * an in-app `Link` and keeps the student's place; only the standalone app has
+ * to cross to another port.
+ */
+export function standalone(): boolean {
+  return typeof window !== "undefined" && window.location.port === "5201";
+}
+
+/** A path in M02, as an in-app path in the shell or a full URL standalone. */
+export function m02Href(path: string, candidateId: string): { href: string; external: boolean } {
+  return standalone()
+    ? { href: m02Link(path, candidateId), external: true }
+    : { href: path, external: false };
+}

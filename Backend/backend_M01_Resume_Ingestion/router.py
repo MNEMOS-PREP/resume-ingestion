@@ -110,6 +110,7 @@ from .rewrite import RewriteSuggestion, suggest_grounded
 from .storage import get_bytes as source_bytes
 from .storage import put as store_artifact
 from .storage import put_bytes as store_source
+from .tailor import TailoredResume, TailoredRevision
 
 log = logging.getLogger("uvicorn.error")
 
@@ -1791,6 +1792,14 @@ def delete_resume(resume_id: uuid.UUID, session: Session = Depends(get_db)):
         session.delete(contact)
     for event in session.exec(select(ResumeEvent).where(ResumeEvent.resume_id == resume_id)).all():
         session.delete(event)
+    # Its tailored copies go with it: each is this document worded for one job,
+    # and printing one needs the original's text (2026-11-17).
+    for copy in session.exec(select(TailoredResume).where(TailoredResume.resume_id == resume_id)).all():
+        for revision in session.exec(
+            select(TailoredRevision).where(TailoredRevision.tailored_id == copy.id)
+        ).all():
+            session.delete(revision)
+        session.delete(copy)
     session.delete(resume)
     session.commit()
 
