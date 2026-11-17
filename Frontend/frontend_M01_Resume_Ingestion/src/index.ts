@@ -38,6 +38,20 @@ export { PdfHighlightViewer, PageRedactionNote } from "./components/PdfHighlight
 export { ContactPanel } from "./components/ContactPanel";
 export { DrillPanel } from "./components/DrillPanel";
 export { DateEditor } from "./components/DateEditor";
+// Tailored copies (2026-11-17): M02's job-description screen mounts these to
+// tailor a resume to a posting, so the editor, the live PDF and the download
+// are this module's, written once, and the same on both screens.
+export { ResumeList } from "./components/ResumeList";
+export { FixDiff, Blanks } from "./components/FixDiff";
+export { TailoredEditor } from "./components/TailoredEditor";
+export type { BlockAnnotation, BlockMark } from "./components/TailoredEditor";
+export { TailoredPreview } from "./components/TailoredPreview";
+export type { PreviewFocus } from "./components/TailoredPreview";
+export { TailoredRewrite } from "./components/TailoredRewrite";
+export { DownloadPdf, suggestFilename, stem as filenameStem } from "./components/DownloadPdf";
+export { TailoredCopies } from "./components/TailoredCopies";
+export { PhotoToggle } from "./components/PhotoToggle";
+export { TailoredVersionPage } from "./components/TailoredVersionPage";
 // Mounted by name in the platform shell, which owns "/" and cannot take a
 // second index route. Standalone still routes to them through m01Routes.
 export { IngestPage, SkippedPage } from "./components/IngestPage";
@@ -80,6 +94,16 @@ export {
   useDiff,
   useSkills,
   useUploadResume,
+  apiProblem,
+  deleteTailored,
+  downloadTailoredPdf,
+  useAddTailoredBlock,
+  useCreateTailored,
+  useEditTailoredBlock,
+  useMoveTailoredBlock,
+  useTailored,
+  useTailoredCopies,
+  useTailoredLayout,
 } from "./api";
 export type {
   Capabilities,
@@ -104,4 +128,10 @@ export type {
   SkillListing,
   SkillMention,
   SourceSpan,
+  TailoredBlock,
+  TailoredLayout,
+  TailoredResume,
+  TailoredRevision,
+  TargetedRewrite,
+  PageBox,
 } from "./types";

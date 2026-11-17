@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import SQLModel, create_engine
 
 from backend_M01_Resume_Ingestion.router import router
+from backend_M01_Resume_Ingestion.tailored_api import router as tailored_router
 
 log = logging.getLogger("uvicorn.error")
 
@@ -47,6 +48,8 @@ app.add_middleware(
 )
 
 app.include_router(router)
+# Tailored copies (2026-11-17): one resume worded for one job, the original untouched.
+app.include_router(tailored_router)
 
 
 @app.get("/status", response_model=ModuleStatus, tags=["meta"])

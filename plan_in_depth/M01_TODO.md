@@ -20,6 +20,27 @@ Task list for taking **M01 Resume Ingestion & Claim Extraction** to 100% of
 
 Legend: ✅ done · 🟡 partly done · ⬜ not started
 
+### 2026-11-17 — tailored copies, a generated PDF, and the student's photo
+
+- ✅ **Tailored copies** (`tailor.py`, `tailored_api.py`,
+  `/v1/resumes/{id}/tailored/...`): a resume as blocks, worded for one target
+  (M02's job), every change a revision, any revision restorable, the uploaded
+  resume never written, copies deleted with their resume. Contact lines are
+  locked: masked on screen, printed only in the owner's download.
+- ✅ **The PDF is generated**, keeping the original's page size, margins, body
+  size and serif or sans; preview images and the download are the same file,
+  and `/layout` gives every printed line's rectangle for the claim trace.
+- ✅ **The photo**: the student's picture from Settings (M04), else the photo
+  printed on the uploaded resume; top right, text flowing beside it; on or off
+  per copy (`PATCH .../style`).
+- ✅ **A line worded for one requirement** (`rewrite.reword_for_requirement`):
+  a draft that adds or drops a number, or names a new tool, is discarded with
+  the reason.
+- ✅ **Shared UI** for M02: `ResumeList`, `FixDiff`, `TailoredEditor`,
+  `TailoredPreview`, `TailoredRewrite`, `DownloadPdf`, `PhotoToggle`; and a
+  Versions list on the review page with `/resumes/:id/versions/:copy`.
+- Tests: **380 passed**, **27** gates (`test_tailored.py`).
+
 ---
 
 ### 2026-10-22 — a drill M06 refuses says why (`f8ad4e8`)

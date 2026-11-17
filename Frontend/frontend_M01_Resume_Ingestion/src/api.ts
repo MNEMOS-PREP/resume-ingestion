@@ -27,9 +27,9 @@
  * of them. If a second module needs them, that is the moment they graduate.
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@ai/core";
+import { ApiError, api } from "@ai/core";
 
 import { identityHeaders } from "./components/candidate";
 import type {
@@ -62,6 +62,13 @@ import type {
   ShareGrant,
   ShareIn,
   SkillListing,
+  TailoredBlockInsert,
+  TailoredBlockMove,
+  TailoredBlockPatch,
+  TailoredLayout,
+  TailoredResume,
+  TailoredRevision,
+  TargetedRewrite,
 } from "./types";
 
 const BASE = import.meta.env.VITE_API_BASE ?? "";
@@ -177,6 +184,8 @@ export const m01Keys = {
   review: (id: string) => ["m01", "review", id] as const,
   disclosure: (id: string, viewer: string) => ["m01", "disclosure", id, viewer] as const,
   library: (candidateId: string) => ["m01", "library", candidateId] as const,
+  tailoredList: (resumeId: string) => ["m01", "tailored", resumeId] as const,
+  tailored: (resumeId: string, id: string) => ["m01", "tailored", resumeId, id] as const,
 };
 
 /** Everything derived from one resume, invalidated together after a write. */
@@ -790,5 +799,266 @@ export function usePageImage(resumeId: string, page: number) {
       if (!response.ok) throw new Error(`Page ${page} could not be drawn (${response.status}).`);
       return URL.createObjectURL(await response.blob());
     },
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/*  Tailored copies (2026-11-17)                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The sentence a refused change carries, for a screen to show.
+ *
+ * Every tailored route refuses with a reason — "Fill every [blank]…", "This
+ * line holds your contact details…" — and a status code is not one.
+ */
+export function apiProblem(error: unknown): string {
+  if (error instanceof ApiError) return error.detail;
+  if (error instanceof Error) return error.message;
+  return "Something went wrong.";
+}
+
+async function send<T>(method: "PATCH" | "POST", path: string, body: unknown): Promise<T> {
+  // Raw fetch for PATCH (core has no verb for it), with identity — see `patch`.
+  const response = await fetch(`${BASE}${path}`, {
+    method,
+    headers: { "Content-Type": "application/json", ...identityHeaders() },
+    body: JSON.stringify(body ?? {}),
+  });
+  if (!response.ok) {
+    let detail = response.statusText;
+    try {
+      const parsed = await response.json();
+      if (typeof parsed?.detail === "string") detail = parsed.detail;
+    } catch {
+      /* keep the status text */
+    }
+    throw new ApiError(response.status, detail);
+  }
+  return (await response.json()) as T;
+}
+
+/** Every copy of one resume, tailored for one job each. Newest change first. */
+export function useTailoredCopies(resumeId: string | undefined) {
+  return useQuery({
+    queryKey: m01Keys.tailoredList(resumeId ?? ""),
+    enabled: Boolean(resumeId),
+    queryFn: () => api.get<TailoredResume[]>(`/v1/resumes/${resumeId}/tailored`),
+  });
+}
+
+/**
+ * Make — or find — the copy of a resume for one target. Idempotent on the
+ * server, so a retry or a second tab gets the student's edits, not a fresh copy.
+ */
+export function useCreateTailored() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      resumeId,
+      targetRef,
+      label,
+      targetKind = "jd",
+    }: {
+      resumeId: string;
+      targetRef: string;
+      label: string;
+      /** `jd` for a job description (M02), `version` for a free-standing copy. */
+      targetKind?: "jd" | "version";
+    }) =>
+      api.post<TailoredResume>(`/v1/resumes/${resumeId}/tailored`, {
+        target_kind: targetKind,
+        target_ref: targetRef,
+        label,
+      }),
+    onSuccess: (copy) => {
+      qc.setQueryData(m01Keys.tailored(copy.resume_id, copy.id), copy);
+      qc.invalidateQueries({ queryKey: m01Keys.tailoredList(copy.resume_id), exact: true });
+    },
+  });
+}
+
+export function useTailored(resumeId: string | undefined, id: string | undefined) {
+  return useQuery({
+    queryKey: m01Keys.tailored(resumeId ?? "", id ?? ""),
+    enabled: Boolean(resumeId && id),
+    queryFn: () => api.get<TailoredResume>(`/v1/resumes/${resumeId}/tailored/${id}`),
+  });
+}
+
+/** After any change: the copy as the server now has it, and its history stale. */
+function settled(qc: ReturnType<typeof useQueryClient>, copy: TailoredResume) {
+  qc.setQueryData(m01Keys.tailored(copy.resume_id, copy.id), copy);
+  qc.invalidateQueries({ queryKey: [...m01Keys.tailored(copy.resume_id, copy.id), "revisions"] });
+  qc.invalidateQueries({ queryKey: m01Keys.tailoredList(copy.resume_id), exact: true });
+}
+
+/** Retype, hide or show one block. Refusals carry their reason (`apiProblem`). */
+export function useEditTailoredBlock(resumeId: string, id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ blockId, patch: body }: { blockId: string; patch: TailoredBlockPatch }) =>
+      send<TailoredResume>("PATCH", `/v1/resumes/${resumeId}/tailored/${id}/blocks/${blockId}`, body),
+    onSuccess: (copy) => settled(qc, copy),
+  });
+}
+
+/** A line the student writes — never one written for them. */
+export function useAddTailoredBlock(resumeId: string, id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: TailoredBlockInsert) =>
+      send<TailoredResume>("POST", `/v1/resumes/${resumeId}/tailored/${id}/blocks`, body),
+    onSuccess: (copy) => settled(qc, copy),
+  });
+}
+
+/** Move a line, or a whole entry, within its section. */
+export function useMoveTailoredBlock(resumeId: string, id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: TailoredBlockMove) =>
+      send<TailoredResume>("POST", `/v1/resumes/${resumeId}/tailored/${id}/move`, body),
+    onSuccess: (copy) => settled(qc, copy),
+  });
+}
+
+export function useTailoredRevisions(resumeId: string, id: string, enabled = true) {
+  return useQuery({
+    queryKey: [...m01Keys.tailored(resumeId, id), "revisions"],
+    enabled: enabled && Boolean(resumeId && id),
+    queryFn: () => api.get<TailoredRevision[]>(`/v1/resumes/${resumeId}/tailored/${id}/revisions`),
+  });
+}
+
+/** Back to version `n`, as a new version — nothing after it is lost. */
+export function useRestoreTailored(resumeId: string, id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (n: number) =>
+      send<TailoredResume>("POST", `/v1/resumes/${resumeId}/tailored/${id}/restore`, { n }),
+    onSuccess: (copy) => settled(qc, copy),
+  });
+}
+
+/** Delete one copy and its history; the resume it came from is untouched. */
+export function deleteTailored(resumeId: string, id: string): Promise<void> {
+  return api.del<void>(`/v1/resumes/${resumeId}/tailored/${id}`);
+}
+
+export function useDeleteTailored(resumeId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteTailored(resumeId, id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: m01Keys.tailoredList(resumeId), exact: true }),
+  });
+}
+
+/**
+ * Where every block landed on the PDF this revision makes. Keyed by revision:
+ * a revision never changes, so each one is fetched once.
+ */
+export function useTailoredLayout(resumeId: string, id: string, revision: number | undefined) {
+  return useQuery({
+    queryKey: [...m01Keys.tailored(resumeId, id), "layout", revision ?? -1],
+    enabled: Boolean(resumeId && id) && revision !== undefined,
+    staleTime: Infinity,
+    placeholderData: keepPreviousData,
+    queryFn: () => api.get<TailoredLayout>(`/v1/resumes/${resumeId}/tailored/${id}/layout`),
+  });
+}
+
+/**
+ * One page of the generated PDF, contact painted out, as a blob URL — fetched
+ * with identity, which an `<img src>` cannot send (see `usePageImage`). The
+ * previous revision's image stays up while the next one draws.
+ */
+export function useTailoredPage(
+  resumeId: string,
+  id: string,
+  page: number,
+  revision: number | undefined,
+  zoom: number,
+  /** The photo's digest: a picture changed in Settings is a new image. */
+  photo?: string | null,
+) {
+  return useQuery({
+    queryKey: [...m01Keys.tailored(resumeId, id), "page", page, revision ?? -1, zoom, photo ?? ""],
+    enabled: Boolean(resumeId && id) && revision !== undefined,
+    staleTime: Infinity,
+    retry: 1,
+    placeholderData: keepPreviousData,
+    queryFn: async () => {
+      const response = await fetch(
+        // The photo's digest is in the URL as well as the key: the image is
+        // cached as immutable per URL, and a picture changed in Settings is
+        // a different image at the same revision.
+        `${BASE}/v1/resumes/${resumeId}/tailored/${id}/pages/${page}?zoom=${zoom}&rev=${revision}&photo=${photo ?? ""}`,
+        { headers: identityHeaders() },
+      );
+      if (!response.ok) throw new Error(`Page ${page} could not be drawn (${response.status}).`);
+      return URL.createObjectURL(await response.blob());
+    },
+  });
+}
+
+/**
+ * The file itself, generated now from the latest revision, saved under
+ * `filename`. Your own download prints your contact details; nothing else does.
+ */
+export async function downloadTailoredPdf(
+  resumeId: string,
+  id: string,
+  filename: string,
+): Promise<{ filename: string; revision: number | null }> {
+  const response = await fetch(
+    `${BASE}/v1/resumes/${resumeId}/tailored/${id}/pdf?filename=${encodeURIComponent(filename)}`,
+    { headers: identityHeaders() },
+  );
+  if (!response.ok) throw new ApiError(response.status, "The PDF could not be made. Try again.");
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1];
+  const chosen = encoded ? decodeURIComponent(encoded) : filename;
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = chosen;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  const revision = Number(response.headers.get("X-Revision"));
+  return { filename: chosen, revision: Number.isFinite(revision) ? revision : null };
+}
+
+/** A draft of one line worded towards one requirement — on request, checked. */
+export function useRewriteTailoredBlock(resumeId: string, id: string) {
+  return useMutation({
+    mutationFn: ({
+      blockId,
+      requirement,
+      jdLine,
+      allowedTerms,
+    }: {
+      blockId: string;
+      requirement: string;
+      jdLine?: string | null;
+      allowedTerms?: string[];
+    }) =>
+      api.post<TargetedRewrite>(`/v1/resumes/${resumeId}/tailored/${id}/blocks/${blockId}/rewrite`, {
+        requirement,
+        jd_line: jdLine ?? null,
+        allowed_terms: allowedTerms ?? [],
+      }),
+  });
+}
+
+/** Print the photo on this copy, or leave it off — saved as a version. */
+export function useTailoredPhoto(resumeId: string, id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (photo: boolean) =>
+      send<TailoredResume>("PATCH", `/v1/resumes/${resumeId}/tailored/${id}/style`, { photo }),
+    onSuccess: (copy) => settled(qc, copy),
   });
 }

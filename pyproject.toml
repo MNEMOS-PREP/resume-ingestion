@@ -76,3 +76,4 @@ select = ["E", "F", "I", "B", "UP"]
 ignore = ["BLE001", "E501"] # Ignore blind exceptions and line length limits
 [tool.ruff.lint.per-file-ignores]
 "**/router.py" = ["B008"]
+"**/tailored_api.py" = ["B008"]

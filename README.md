@@ -76,6 +76,20 @@ real resumes for the golden set — and the inter-module wiring, both tracked in
 
 ---
 
+## Tailored copies (2026-11-17)
+
+A **tailored copy** is a resume worded for one job without touching the
+resume: blocks (each line, pointing at the characters it came from), every
+change a revision, any revision restorable (`tailor.py`,
+`/v1/resumes/{id}/tailored/...`). The PDF is **generated** from it — same page
+size, margins, type size and serif or sans as the original, with the student's
+photo when they have one — so the preview and the download are the same file,
+and every printed line's rectangle is known (`/layout`). Contact details are
+printed only in the student's own download. M02's job-description screen
+mounts the editor, preview and resume list from this module's `index.ts`;
+here they are on the review page's Versions list and
+`/resumes/:id/versions/:copy`.
+
 ## The six properties worth the code
 
 Each of these is a thing that can silently stop being true, so each is a test

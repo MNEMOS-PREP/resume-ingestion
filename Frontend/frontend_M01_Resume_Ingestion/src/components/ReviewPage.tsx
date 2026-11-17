@@ -28,15 +28,14 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useEditClaim, useResume, useReview, useRewriteClaim } from "../api";
 import { DeleteResumeDialog } from "./DeleteResumeDialog";
 import { DrillPanel } from "./DrillPanel";
+import { BLANK, FixDiff } from "./FixDiff";
 import { LibraryPicker } from "./LibraryPicker";
 import { PdfHighlightViewer } from "./PdfHighlightViewer";
 import { ResumeTabs } from "./ResumeTabs";
 import { SECTION_LABEL } from "./sections";
+import { TailoredCopies } from "./TailoredCopies";
 import { Btn, Empty, Panel, SkeletonRows } from "../ui/primitives";
 import type { DocumentSegment, LibraryKind, ResumeReview, ReviewCheck, ReviewGroup, ReviewIssue } from "../types";
-
-/** A blank only the student can fill. Kept in step with `review.BLANK`. */
-const BLANK = /\[[^[\]]+\]/g;
 
 const GROUP_LABEL: Record<ReviewGroup, string> = {
   defend: "Defend",
@@ -91,37 +90,6 @@ function useIgnored(resumeId: string) {
     [key],
   );
   return { ignored, toggle };
-}
-
-/* ── a diff that shows exactly what a fix changes ──────────────────────── */
-
-function Blanks({ text }: { text: string }) {
-  const parts: React.ReactNode[] = [];
-  let at = 0;
-  for (const match of text.matchAll(BLANK)) {
-    if (match.index > at) parts.push(text.slice(at, match.index));
-    parts.push(
-      <mark key={match.index} className="rounded bg-reported-soft px-0.5 font-medium text-ink">
-        {match[0]}
-      </mark>,
-    );
-    at = match.index + match[0].length;
-  }
-  if (at < text.length) parts.push(text.slice(at));
-  return <>{parts}</>;
-}
-
-function FixDiff({ original, suggestion }: { original: string; suggestion: string }) {
-  return (
-    <div className="space-y-1.5 overflow-hidden rounded-lg border border-line">
-      <p className="bg-contested-soft px-3 py-2 text-sm leading-relaxed text-ink-soft line-through decoration-contested/60">
-        {original}
-      </p>
-      <p className="bg-confirmed-soft px-3 py-2 text-sm leading-relaxed text-ink">
-        <Blanks text={suggestion} />
-      </p>
-    </div>
-  );
 }
 
 /* ── one card per failing line ─────────────────────────────────────────── */
@@ -492,6 +460,10 @@ function Rail({
       )}
 
       <div className="hidden border-t border-line pt-4 lg:block">
+        <TailoredCopies resumeId={resumeId} />
+      </div>
+
+      <div className="hidden border-t border-line pt-4 lg:block">
         <p className="px-2.5 text-xs font-medium text-ink-faint">Tools</p>
         <ul className="mt-1 space-y-0.5 text-sm">
           <li>
@@ -501,7 +473,7 @@ function Rail({
           </li>
           <li>
             <Link to={`/resumes/${resumeId}/target`} className="block rounded-lg px-2.5 py-2 text-ink-soft hover:bg-surface-sunken hover:text-ink">
-              Check it against a job
+              Tailor it to a job
             </Link>
           </li>
           <li>
