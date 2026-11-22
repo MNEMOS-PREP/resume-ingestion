@@ -263,13 +263,36 @@ def blanks_in(text: str | None) -> int:
 # ---------------------------------------------------------------------------
 
 
+#: A complexity claim: "O(log n)", "O(1)", "O(n log n)".
+_COMPLEXITY = re.compile(r"\bO\([^()]{1,14}\)")
+
+
 def _risky_reason(claim: dict[str, Any]) -> str:
+    """Why THIS line is hard to defend, from what is in it (2026-11-22).
+
+    The weakest axis picks the kind of reason; the line itself picks the words.
+    Every flagged line used to get "nothing in it is measured" when
+    verifiability was lowest — including "matching runs in O(log n) for 2,000+
+    active riders", which is full of numbers (good_and_bads #12). A number on a
+    resume is a claim to back up, not proof: the line is still worth flagging,
+    for that reason.
+    """
+    text = str(claim.get("text") or "")
     parts = {
         "specificity": "it doesn't say exactly what you built or how",
         "verifiability": "nothing in it is measured, so a panel can't check that it worked",
         "ownership_clarity": "it doesn't say which part was yours",
     }
     weakest = min(parts, key=lambda key: claim.get(key, 1.0))
+    if weakest == "verifiability":
+        complexity = _COMPLEXITY.search(text)
+        if complexity:
+            return f"it claims {complexity.group(0)}, and a panel will ask you to prove it"
+        numbers = [str(q.get("raw")) for q in claim.get("quantifiers") or [] if isinstance(q, dict) and q.get("raw")]
+        if numbers:
+            return f"it claims {numbers[0]}, and a panel will ask how you measured it"
+    if weakest == "specificity" and not claim.get("subject_concepts"):
+        return "it doesn't name what you built it with, or how"
     return parts[weakest]
 
 

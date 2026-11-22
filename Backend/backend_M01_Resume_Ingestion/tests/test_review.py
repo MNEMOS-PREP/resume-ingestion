@@ -370,3 +370,38 @@ def test_a_skill_named_in_a_project_line_is_used_and_labels_are_not_names():
     issue = next(c for c in review.checks if c.id == "skills_used").issues[0]
     # Python is named in the line; "C" is not, and "CNN" must not count for it.
     assert issue.original == "C, Kubernetes"
+
+
+# ── one reason per line, from the line (good_and_bads #12, 2026-11-22) ────
+
+
+def test_a_line_full_of_numbers_is_not_told_nothing_in_it_is_measured():
+    from backend_M01_Resume_Ingestion.review import _risky_reason
+
+    geohash = {
+        "text": "Implemented a geohash index so matching runs in O(log n) for 2,000+ active riders",
+        "specificity": 0.9,
+        "verifiability": 0.5,
+        "ownership_clarity": 0.8,
+        "quantifiers": [{"raw": "2,000+"}],
+        "subject_concepts": ["concept:hashing"],
+    }
+    reason = _risky_reason(geohash)
+    assert "nothing in it is measured" not in reason
+    assert "O(log n)" in reason and "prove" in reason
+
+    numbers_only = dict(geohash, text="Served 2,000+ active riders a day")
+    assert _risky_reason(numbers_only) == "it claims 2,000+, and a panel will ask how you measured it"
+
+    bare = dict(geohash, text="Worked on the matching service", quantifiers=[])
+    assert _risky_reason(bare) == "nothing in it is measured, so a panel can't check that it worked"
+
+
+def test_specificity_says_what_is_missing():
+    from backend_M01_Resume_Ingestion.review import _risky_reason
+
+    vague = {"text": "Helped with the backend", "specificity": 0.2, "verifiability": 0.6,
+             "ownership_clarity": 0.7, "quantifiers": [], "subject_concepts": []}
+    assert _risky_reason(vague) == "it doesn't name what you built it with, or how"
+    named = dict(vague, subject_concepts=["concept:rest_apis"])
+    assert _risky_reason(named) == "it doesn't say exactly what you built or how"
